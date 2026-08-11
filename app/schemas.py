@@ -22,3 +22,36 @@ class JugadorResponse(JugadorBase):
 
     class Config:
         from_attributes = True
+
+class JuegoBase(BaseModel):
+    nombre: str
+    genero: str
+    plataforma: str
+    precio: float
+    stock: int
+
+
+class JuegoCreate(JuegoBase):
+    pass
+
+
+class JuegoUpdate(BaseModel):
+    nombre: str | None = None
+    genero: str | None = None
+    plataforma: str | None = None
+    precio: float | None = None
+    stock: int | None = None
+
+
+class JuegoResponse(JuegoBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class JuegoFiltro(BaseModel):
+    genero: str | None = None
+    plataforma: str | None = None
+    precio_min: float | None = None
+    precio_max: float | None = None
+    disponible: bool | None = None
