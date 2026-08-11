@@ -1,8 +1,15 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 from app.database import engine
+from app.database import Base, engine
+from app import models
+from app.routers import jugadores
 
 app = FastAPI(title="API de Videojuegos")
+
+Base.metadata.create_all(bind=engine)
+
+app.include_router(jugadores.router)
 
 @app.get("/")
 def root():
