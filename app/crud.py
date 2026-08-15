@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from app import models, schemas
+from fastapi import HTTPException
 
 
 def crear_jugador(db: Session, jugador: schemas.JugadorCreate):
@@ -92,3 +93,51 @@ def filtrar_juegos(db: Session, genero: str | None = None, plataforma: str | Non
         query = query.filter(models.Juego.stock == 0)
 
     return query.all()
+
+def crear_compra(db: Session, compra: schemas.CompraCreate):
+    jugador = db.query(models.Jugador).filter(models.Jugador.id == compra.jugador_id).first()
+    if not jugador:
+        raise HTTPException(status_code=404, detail="El jugador no existe")
+
+    juego = db.query(models.Juego).filter(models.Juego.id == compra.juego_id).first()
+    if not juego:
+        raise HTTPException(status_code=404, detail="El juego no existe")
+
+    if compra.cantidad <= 0:
+        raise HTTPException(status_code=400, detail="La cantidad debe ser mayor a cero")
+
+    if juego.stock < compra.cantidad:
+        raise HTTPException(status_code=400, detail="Stock insuficiente para esta compra")
+
+    total = juego.precio * compra.cantidad
+
+    nueva_compra = models.Compra(
+        jugador_id=compra.jugador_id,
+        juego_id=compra.juego_id,
+        cantidad=compra.cantidad,
+        total=total,
+    )
+
+    juego.stock -= compra.cantidad
+
+    db.add(nueva_compra)
+    db.commit()
+    db.refresh(nueva_compra)
+    return nueva_compra
+
+
+def obtener_compras(db: Session):
+    return db.query(models.Compra).all()
+
+
+def obtener_compra(db: Session, compra_id: int):
+    return db.query(models.Compra).filter(models.Compra.id == compra_id).first()
+
+
+def eliminar_compra(db: Session, compra_id: int):
+    compra = obtener_compra(db, compra_id)
+    if not compra:
+        return None
+    db.delete(compra)
+    db.commit()
+    return compra
