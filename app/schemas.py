@@ -55,3 +55,20 @@ class JuegoFiltro(BaseModel):
     precio_min: float | None = None
     precio_max: float | None = None
     disponible: bool | None = None
+
+class CompraCreate(BaseModel):
+    jugador_id: int
+    juego_id: int
+    cantidad: int
+
+
+class CompraResponse(BaseModel):
+    id: int
+    fecha: datetime
+    cantidad: int
+    total: float
+    jugador_id: int
+    juego_id: int
+
+    class Config:
+        from_attributes = True
