@@ -17,14 +17,30 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
+  api-testing:
     build: .
-    container_name: videojuegos-api
+    container_name: videojuegos-api-testing
     restart: always
+    env_file:
+      - .env.testing
     environment:
       DATABASE_URL: postgresql://admin:admin123@db:5432/videojuegos_db
     ports:
-      - "8000:8000"
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api-production:
+    build: .
+    container_name: videojuegos-api-production
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql://admin:admin123@db:5432/videojuegos_db
+    ports:
+      - "8002:8000"
     depends_on:
       db:
         condition: service_healthy
