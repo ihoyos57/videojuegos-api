@@ -1,0 +1,50 @@
+name: Pipeline Production
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin123
+          POSTGRES_DB: videojuegos_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar pruebas y validar cobertura
+        env:
+          DATABASE_URL: postgresql://admin:admin123@localhost:5432/videojuegos_db
+          DB_SCHEMA: schema_production
+        run: pytest --cov=app --cov-fail-under=85 tests/
+
+      - name: Desplegar a Production
+        if: success()
+        run: echo "✅ Todas las pruebas pasaron y la cobertura es ≥85%. Desplegando a ambiente de Production..."
