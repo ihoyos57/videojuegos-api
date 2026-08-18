@@ -1,4 +1,4 @@
-name: Pipeline Testing
+name: 🧪 Pipeline Testing
 
 on:
   push:
@@ -7,9 +7,10 @@ on:
   pull_request:
     branches:
       - develop
+  workflow_dispatch:
 
 jobs:
-  test-and-deploy:
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -45,6 +46,22 @@ jobs:
           DB_SCHEMA: schema_testing
         run: pytest --cov=app --cov-fail-under=60 tests/
 
-      - name: Desplegar a Testing
-        if: success()
-        run: echo "✅ Todas las pruebas pasaron y la cobertura es ≥60%. Desplegando a ambiente de Testing..."
+  deploy:
+    needs: test
+    runs-on: self-hosted
+
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      - name: 📄 Copiar variables de entorno
+        shell: powershell
+        run: |
+          Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.testing" ".env.testing" -Force
+          Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.production" ".env.production" -Force
+
+      - name: 🐳 Construir imagen de testing
+        run: docker compose build api-testing
+
+      - name: 🚀 Desplegar ambiente de pruebas
+        run: docker compose up -d api-testing

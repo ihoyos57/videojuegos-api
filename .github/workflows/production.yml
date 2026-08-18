@@ -1,4 +1,4 @@
-name: Pipeline Production
+name: 🏭 Pipeline Production
 
 on:
   push:
@@ -7,9 +7,10 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  test-and-deploy:
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -45,6 +46,22 @@ jobs:
           DB_SCHEMA: schema_production
         run: pytest --cov=app --cov-fail-under=85 tests/
 
-      - name: Desplegar a Production
-        if: success()
-        run: echo "✅ Todas las pruebas pasaron y la cobertura es ≥85%. Desplegando a ambiente de Production..."
+  deploy:
+    needs: test
+    runs-on: self-hosted
+
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      - name: 📄 Copiar variables de entorno
+        shell: powershell
+        run: |
+          Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.testing" ".env.testing" -Force
+          Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.production" ".env.production" -Force
+
+      - name: 🐳 Construir imagen de producción
+        run: docker compose build api-production
+
+      - name: 🚀 Desplegar ambiente de producción
+        run: docker compose up -d api-production
