@@ -1,4 +1,4 @@
-name: Pipeline Production
+name: 🏭 Pipeline Production
 
 on:
   push:
@@ -53,6 +53,10 @@ jobs:
     steps:
       - name: Obtener código
         uses: actions/checkout@v4
+
+      - name: 📄 Copiar variables de entorno
+        shell: pwsh
+        run: Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.production" ".env.production" -Force
 
       - name: 🐳 Construir imagen de producción
         run: docker compose build api-production

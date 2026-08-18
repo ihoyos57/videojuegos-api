@@ -1,4 +1,4 @@
-name: Pipeline Testing
+name: 🧪 Pipeline Testing
 
 on:
   push:
@@ -53,6 +53,10 @@ jobs:
     steps:
       - name: Obtener código
         uses: actions/checkout@v4
+
+      - name: 📄 Copiar variables de entorno
+        shell: pwsh
+        run: Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.testing" ".env.testing" -Force
 
       - name: 🐳 Construir imagen de testing
         run: docker compose build api-testing
