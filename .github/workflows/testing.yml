@@ -56,7 +56,9 @@ jobs:
 
       - name: 📄 Copiar variables de entorno
         shell: powershell
-        run: Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.testing" ".env.testing" -Force
+        run: |
+          Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.testing" ".env.testing" -Force
+          Copy-Item "C:\Users\LENOVO\Escritorio\videojuegos-api\.env.production" ".env.production" -Force
 
       - name: 🐳 Construir imagen de testing
         run: docker compose build api-testing
