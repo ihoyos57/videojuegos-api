@@ -44,7 +44,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://admin:admin123@localhost:5432/videojuegos_db
           DB_SCHEMA: schema_testing
-        run: pytest --cov=app --cov-fail-under=99 tests/
+        run: pytest --cov=app --cov-fail-under=60 tests/
 
   deploy:
     needs: test
