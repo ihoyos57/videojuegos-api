@@ -38,6 +38,8 @@ def eliminar_jugador(db: Session, jugador_id: int):
     db.commit()
     return jugador
 
+
+ # juegos 
 def crear_juego(db: Session, juego: schemas.JuegoCreate):
     nuevo_juego = models.Juego(**juego.model_dump())
     db.add(nuevo_juego)
@@ -93,6 +95,8 @@ def filtrar_juegos(db: Session, genero: str | None = None, plataforma: str | Non
         query = query.filter(models.Juego.stock == 0)
 
     return query.all()
+
+#compras 
 
 def crear_compra(db: Session, compra: schemas.CompraCreate):
     jugador = db.query(models.Jugador).filter(models.Jugador.id == compra.jugador_id).first()
