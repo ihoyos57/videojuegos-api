@@ -39,4 +39,11 @@ def cached(key_prefix: str):
         return wrapper
     return decorator
 
-
+def invalidate(key_prefix: str = None):
+    """
+    Invalidación manual.
+    - Sin argumentos: limpia TODA la caché.
+    - Con key_prefix: borra solo las entradas que empiecen con ese prefijo
+      (por ejemplo, invalidar solo "peer_animal" tras una actualización).
+    """
+   
