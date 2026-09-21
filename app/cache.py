@@ -43,4 +43,25 @@ _stats = {"hits": 0, "misses": 0}
 def _build_key(prefix: str, args, kwargs) -> str:
     return f"{prefix}:{args}:{sorted(kwargs.items())}"
 
+def cached(key_prefix: str):
+    """
+    Decorador: cachea el resultado de la función durante TTL_SEGUNDOS.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = _build_key(key_prefix, args, kwargs)
+
+            if key in _cache:
+                _stats["hits"] += 1
+                return _cache[key]
+
+            _stats["misses"] += 1
+            resultado = func(*args, **kwargs)
+            _cache[key] = resultado
+            return resultado
+
+        return wrapper
+    return decorator
+
 
