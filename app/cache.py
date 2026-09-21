@@ -46,4 +46,22 @@ def invalidate(key_prefix: str = None):
     - Con key_prefix: borra solo las entradas que empiecen con ese prefijo
       (por ejemplo, invalidar solo "peer_animal" tras una actualización).
     """
+    if key_prefix is None:
+           _cache.clear()
+           return {"invalidado": "toda_la_cache"}
+   
+    claves_a_borrar = [k for k in list(_cache.keys()) if k.startswith(f"{key_prefix}:")]
+    for k in claves_a_borrar:
+        del _cache[k]
+    return {"invalidado": key_prefix, "entradas_eliminadas": len(claves_a_borrar)}
+    
+   
+def cache_stats() -> dict:
+    """Métricas de aciertos/fallos y tamaño actual — útil para /metrics."""
+    return {
+           "hits": _stats["hits"],
+           "misses": _stats["misses"],
+           "entradas_activas": len(_cache),
+           "ttl_segundos": TTL_SEGUNDOS,
+       }
    
