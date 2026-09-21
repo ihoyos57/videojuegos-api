@@ -1,28 +1,3 @@
-"""
-cache.py — Caché en memoria con expiración (TTL) e invalidación manual.
-
-No depende de servicios externos (no Redis, no Memorystore): usa
-cachetools.TTLCache, que vive en la memoria del proceso de tu API.
-Sirve perfecto para cachear respuestas de entidades que tú mismo
-consultas (ej. datos de tus compañeros por HTTP, o resultados
-costosos de tu propia base de datos).
-
-Uso típico:
-
-    from cache import cached, invalidate, cache_stats
-
-    @cached(key_prefix="peer_animal")
-    def obtener_animal(animal_id: int):
-        # lógica costosa: llamada HTTP a la API de un compañero,
-        # o consulta pesada a la BD
-        ...
-        return resultado
-
-Cada vez que llames obtener_animal(5), si ya está en caché y no ha
-expirado, se devuelve al instante sin repetir el trabajo. Si expiró
-(o nunca se llamó), se ejecuta la función real y se guarda el
-resultado.
-"""
 
 import time
 import functools
