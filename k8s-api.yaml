@@ -14,6 +14,7 @@ data:
   DB_SCHEMA: "public"
   ENVIRONMENT: "production"
   PORT: "8080"
+  AWS_API_URL: "http://ae7646e6cf2b74912906f40f9a30539d-032ee795ec92fbaf.elb.us-east-2.amazonaws.com"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -89,6 +90,9 @@ spec:
             - name: PORT
               valueFrom:
                 configMapKeyRef: { name: api-config, key: PORT }
+            - name: AWS_API_URL
+              valueFrom:
+                configMapKeyRef: { name: api-config, key: AWS_API_URL }
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef: { name: db-secret, key: DB_PASSWORD }
