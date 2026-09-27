@@ -64,7 +64,7 @@ spec:
               memory: 64Mi
       containers:
         - name: api
-          image: us-central1-docker.pkg.dev/videojuegos-api-508522/cloud-run-source-deploy/api-v2:1.0.0
+          image: us-central1-docker.pkg.dev/videojuegos-api-508522/cloud-run-source-deploy/api-v2:1.0.1
           ports:
             - containerPort: 8080
           env:
