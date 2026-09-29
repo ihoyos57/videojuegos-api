@@ -15,6 +15,8 @@ data:
   ENVIRONMENT: "production"
   PORT: "8080"
   AWS_API_URL: "http://ae7646e6cf2b74912906f40f9a30539d-032ee795ec92fbaf.elb.us-east-2.amazonaws.com"
+  OBJETIVA_API_URL: "http://57.169.3.252"
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -93,6 +95,10 @@ spec:
             - name: AWS_API_URL
               valueFrom:
                 configMapKeyRef: { name: api-config, key: AWS_API_URL }
+            - name: OBJETIVA_API_URL
+              valueFrom:
+                configMapKeyRef: { name: api-config, key: OBJETIVA_API_URL }
+        
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef: { name: db-secret, key: DB_PASSWORD }
