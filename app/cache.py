@@ -24,28 +24,23 @@ def cached(key_prefix: str):
     """
     def decorator(func):
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        async def wrapper(*args, **kwargs):
             key = _build_key(key_prefix, args, kwargs)
-
+ 
             if key in _cache:
                 _stats["hits"] += 1
                 return _cache[key]
-
+ 
             _stats["misses"] += 1
-            resultado = func(*args, **kwargs)
+            resultado = await func(*args, **kwargs)
             _cache[key] = resultado
             return resultado
-
+ 
         return wrapper
     return decorator
 
 def invalidate(key_prefix: str = None):
-    """
-    Invalidación manual.
-    - Sin argumentos: limpia TODA la caché.
-    - Con key_prefix: borra solo las entradas que empiecen con ese prefijo
-      (por ejemplo, invalidar solo "peer_animal" tras una actualización).
-    """
+
     if key_prefix is None:
            _cache.clear()
            return {"invalidado": "toda_la_cache"}
@@ -57,7 +52,7 @@ def invalidate(key_prefix: str = None):
     
    
 def cache_stats() -> dict:
-    """Métricas de aciertos/fallos y tamaño actual — útil para /metrics."""
+   
     return {
            "hits": _stats["hits"],
            "misses": _stats["misses"],
