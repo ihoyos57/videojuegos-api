@@ -16,3 +16,8 @@ async def tareas_de_objetiva(request: Request):
     params = dict(request.query_params)
     datos, errores = await consultar_remotos("/tareas", params, token)
     return {"datos": datos, "errores": errores}
+
+@cached_async("agregado_pets")
+async def _consultar_pets(params_items, token):
+    return await consultar_remotos("/pets", dict(params_items), token)
+ 
