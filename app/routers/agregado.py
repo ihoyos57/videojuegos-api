@@ -32,6 +32,10 @@ def ver_estadisticas_cache():
     """Para mostrarle al profesor: hits, misses, entradas activas y TTL."""
     return cache_stats()
  
+@router.post("/cache-invalidar")
+def limpiar_cache(prefijo: str | None = None):
+    """Limpia toda la cache, o solo las entradas de un prefijo (ej: 'agregado_tareas')."""
+    return invalidate(prefijo)
 
 
  
