@@ -1,3 +1,4 @@
+from app.cache import cache_stats
 from fastapi import APIRouter, Request
 from app.federation import consultar_remotos
 
@@ -25,6 +26,12 @@ async def tareas_de_objetiva(request: Request):
     params = dict(request.query_params)
     datos, errores = await _consultar_tareas(params, token)
     return {"datos": datos, "errores": errores}
+
+@router.get("/cache-stats")
+def ver_estadisticas_cache():
+    """Para mostrarle al profesor: hits, misses, entradas activas y TTL."""
+    return cache_stats()
+ 
 
 
  
