@@ -64,7 +64,7 @@ spec:
               memory: 64Mi
       containers:
         - name: api
-          image: us-central1-docker.pkg.dev/videojuegos-api-508522/cloud-run-source-deploy/api-v2:1.0.1
+          image: us-central1-docker.pkg.dev/videojuegos-api-508522/cloud-run-source-deploy/api-v2:1.0.3
           ports:
             - containerPort: 8080
           env:
@@ -97,7 +97,7 @@ spec:
               valueFrom:
                 secretKeyRef: { name: db-secret, key: DB_PASSWORD }
             - name: DATABASE_URL
-              value: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+              value: "postgresql+psycopg2://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
           # Probes TCP porque no encontre una ruta /health en el codigo.
           # Cuando agregues /health, cambialas por httpGet (ver mensaje).
           startupProbe:

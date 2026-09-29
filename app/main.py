@@ -5,9 +5,12 @@ from app.database import Base, engine
 from app import models
 from app.routers import jugadores, juegos, compras
 from app.routers import agregado
+from prometheus_fastapi_instrumentator import Instrumentator
 
 
 app = FastAPI(title="API de Videojuegos")
+
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 Base.metadata.create_all(bind=engine)
 
