@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from sqlalchemy import text
-
 from app.database import Base, engine
 from app import models
 from app.routers import jugadores, juegos, compras
 from app.routers import agregado
 from prometheus_fastapi_instrumentator import Instrumentator
+from app.middleware import TraceIdMiddleware
+
 
 
 app = FastAPI(title="API de Videojuegos")
@@ -18,6 +19,7 @@ app.include_router(jugadores.router)
 app.include_router(juegos.router)
 app.include_router(compras.router)
 app.include_router(agregado.router)
+app.add_middleware(TraceIdMiddleware)
 
 
 @app.get("/")
