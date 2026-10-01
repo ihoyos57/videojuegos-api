@@ -4,7 +4,7 @@ import httpx
 
 REMOTOS = {
     "aws": os.getenv("AWS_API_URL"),
-    # "azure": os.getenv("AZURE_API_URL"),  # se agrega cuando tengas la URL
+    "objetiva": os.getenv("OBJETIVA_API_URL"),
 }
 
 async def _consultar(client, origen, base_url, ruta, params, token):

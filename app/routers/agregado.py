@@ -22,7 +22,7 @@ async def mascotas_de_aws(request: Request):
     return {"datos": datos, "errores": errores}
 
 
-@cached_async("agregado_tareas")
+@cached("agregado_tareas")
 async def _consultar_tareas(params_items, token):
     return await consultar_remotos("/tareas", dict(params_items), token)
 
