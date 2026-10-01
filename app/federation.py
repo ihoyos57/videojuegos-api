@@ -3,6 +3,8 @@ import asyncio
 import logging
 import httpx
 
+from app.cache import cached_async
+
 logger = logging.getLogger("trace")
 
 REMOTOS = {
@@ -14,11 +16,10 @@ REMOTOS = {
 
 async def _consultar(client, origen, base_url, ruta, params, token, trace_id=None):
     if not base_url:
+        logger.warning(f"[trace_id={trace_id}] {origen}: URL no configurada")
         return origen, [], "URL no configurada"
 
-    # Misma linea de log que se les pidio mostrar: deja ver, siguiendo
-    # el mismo trace_id, que esta API esta a punto de llamar a otra nube.
-    logger.info(f"[trace_id={trace_id}] Consultando {origen}")
+    logger.info(f"[trace_id={trace_id}] Consultando {origen} -> {base_url}{ruta}")
 
     try:
         headers = {}
@@ -28,8 +29,10 @@ async def _consultar(client, origen, base_url, ruta, params, token, trace_id=Non
             headers["X-Trace-Id"] = trace_id
         r = await client.get(f"{base_url}{ruta}", params=params, headers=headers, timeout=5.0)
         r.raise_for_status()
+        logger.info(f"[trace_id={trace_id}] {origen} respondió OK ({r.status_code})")
         return origen, r.json(), None
     except Exception as e:
+        logger.error(f"[trace_id={trace_id}] {origen} FALLÓ: {e}")
         return origen, [], str(e)
 
 
@@ -49,13 +52,9 @@ async def consultar_remotos(ruta, params, token, trace_id=None):
     return datos, errores
 
 
+@cached_async(key_prefix="consultar_uno", ignorar_en_clave=("trace_id",))
 async def consultar_uno(origen, ruta, params, token, trace_id=None):
-    """
-    Consulta UNA sola nube especifica (no todas). Util cuando necesitas
-    la lista de pets o de tareas por separado, por ejemplo para elegir
-    una al azar y pegarla a otra entidad.
-    Devuelve (items, error).
-    """
+   
     base_url = REMOTOS.get(origen)
     async with httpx.AsyncClient() as client:
         _, items, error = await _consultar(client, origen, base_url, ruta, params, token, trace_id)
