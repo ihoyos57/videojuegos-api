@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app import schemas, crud
 from app.database import get_db
-from app.enriquecer import obtener_entidades_companeros, agregar_relacionados
+from app.enriquecer import obtener_entidades_companeros, agregar_relacionados, construir_respuesta_lista
 
 router = APIRouter(prefix="/compras", tags=["Compras"])
 
@@ -12,16 +12,15 @@ def crear(compra: schemas.CompraCreate, db: Session = Depends(get_db)):
     return crud.crear_compra(db, compra)
 
 
+# Igual que en jugadores.py: sin response_model para no perder los
+# campos extra que agrega agregar_relacionados().
 @router.get("/")
 async def listar(request: Request, db: Session = Depends(get_db)):
     compras = crud.obtener_compras(db)
-    pets, error_pets, tareas, error_tareas = await obtener_entidades_companeros(request)
+    items = [schemas.CompraResponse.model_validate(c).model_dump() for c in compras]
 
-    resultado = []
-    for compra in compras:
-        data = schemas.CompraResponse.model_validate(compra).model_dump()
-        resultado.append(agregar_relacionados(data, pets, error_pets, tareas, error_tareas))
-    return resultado
+    pets, error_pets, tareas, error_tareas = await obtener_entidades_companeros(request)
+    return construir_respuesta_lista("compras", items, pets, error_pets, tareas, error_tareas)
 
 
 @router.get("/{compra_id}")

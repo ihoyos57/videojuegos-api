@@ -1,29 +1,21 @@
-"""
-enriquecer.py — Lógica compartida para pegar entidades de los
-compañeros (AWS y Azure/Objetiva) a CUALQUIERA de tus 3 entidades
-propias (juegos, jugadores, compras).
-
-Se usa igual desde juegos.py, jugadores.py y compras.py: así
-garantizamos que los 3 se comporten exactamente igual, como pide
-el enunciado.
-"""
-
 import random
 from fastapi import Request
 from app.federation import consultar_uno
 
 
 async def obtener_entidades_companeros(request: Request):
-    """
-    Trae, EN TIEMPO REAL, la lista de pets (AWS) y tareas (Azure).
-    Gracias a la caché en consultar_uno, si ya se pidió hace menos
-    de 30s no se repite la llamada de red.
-    """
+   
     token = request.headers.get("Authorization", "")
     trace_id = getattr(request.state, "trace_id", None)
 
     pets, error_pets = await consultar_uno("aws", "/pets", {}, token, trace_id)
     tareas, error_tareas = await consultar_uno("objetiva", "/api/v2/tareas", {}, token, trace_id)
+
+    # Filtro defensivo: la API de AWS tiene un bug confirmado donde a
+    # veces mezcla un objeto de "tarea" dentro de la lista de /pets.
+    # Una mascota de verdad siempre trae el campo "especie"; si no lo
+    # tiene, no es una mascota y se descarta antes de elegir al azar.
+    pets = [p for p in pets if isinstance(p, dict) and "especie" in p]
 
     return pets, error_pets, tareas, error_tareas
 
@@ -50,3 +42,21 @@ def agregar_relacionados(data: dict, pets, error_pets, tareas, error_tareas) -> 
         data["tarea_error"] = error_tareas
 
     return data
+
+
+def construir_respuesta_lista(
+    nombre_coleccion: str,
+    items: list,
+    pets, error_pets, tareas, error_tareas,
+) -> dict:
+    
+    respuesta = {
+        nombre_coleccion: items,
+        "mascota_relacionada": random.choice(pets) if pets else [],
+        "tarea_relacionada": random.choice(tareas) if tareas else [],
+    }
+    if error_pets:
+        respuesta["mascota_error"] = error_pets
+    if error_tareas:
+        respuesta["tarea_error"] = error_tareas
+    return respuesta

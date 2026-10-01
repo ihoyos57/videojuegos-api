@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app import schemas, crud
 from app.database import get_db
-from app.enriquecer import obtener_entidades_companeros, agregar_relacionados
+from app.enriquecer import obtener_entidades_companeros, agregar_relacionados, construir_respuesta_lista
 
 router = APIRouter(prefix="/jugadores", tags=["Jugadores"])
 
@@ -12,17 +12,17 @@ def crear(jugador: schemas.JugadorCreate, db: Session = Depends(get_db)):
     return crud.crear_jugador(db, jugador)
 
 
-
+# OJO: se quitó response_model de aquí a propósito. Si lo dejamos,
+# FastAPI filtra la respuesta y elimina los campos extra
+# (mascota_relacionada, tarea_relacionada) porque no están en
+# schemas.JugadorResponse.
 @router.get("/")
 async def listar(request: Request, db: Session = Depends(get_db)):
     jugadores = crud.obtener_jugadores(db)
-    pets, error_pets, tareas, error_tareas = await obtener_entidades_companeros(request)
+    items = [schemas.JugadorResponse.model_validate(j).model_dump() for j in jugadores]
 
-    resultado = []
-    for jugador in jugadores:
-        data = schemas.JugadorResponse.model_validate(jugador).model_dump()
-        resultado.append(agregar_relacionados(data, pets, error_pets, tareas, error_tareas))
-    return resultado
+    pets, error_pets, tareas, error_tareas = await obtener_entidades_companeros(request)
+    return construir_respuesta_lista("jugadores", items, pets, error_pets, tareas, error_tareas)
 
 
 @router.get("/{jugador_id}")

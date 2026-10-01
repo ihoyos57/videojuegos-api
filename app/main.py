@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+
+load_dotenv()
 from fastapi import FastAPI
 from sqlalchemy import text
 from app.database import Base, engine
@@ -6,7 +9,6 @@ from app.routers import jugadores, juegos, compras
 from app.routers import agregado
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.middleware import TraceIdMiddleware
-
 
 
 app = FastAPI(title="API de Videojuegos")

@@ -13,6 +13,7 @@ REMOTOS = {
     # "azure": os.getenv("AZURE_API_URL"),  # se agrega cuando tengan la URL
 }
 
+logger.info(f"REMOTOS configurados: {REMOTOS}")
 
 async def _consultar(client, origen, base_url, ruta, params, token, trace_id=None):
     if not base_url:
@@ -27,13 +28,36 @@ async def _consultar(client, origen, base_url, ruta, params, token, trace_id=Non
             headers["Authorization"] = token
         if trace_id:
             headers["X-Trace-Id"] = trace_id
-        r = await client.get(f"{base_url}{ruta}", params=params, headers=headers, timeout=5.0)
+        r = await client.get(f"{base_url}{ruta}", params=params, headers=headers, timeout=10.0)
         r.raise_for_status()
-        logger.info(f"[trace_id={trace_id}] {origen} respondió OK ({r.status_code})")
-        return origen, r.json(), None
+        cuerpo = r.json()
+
+        # Normalización: algunas APIs de compañeros devuelven la lista
+        # directa ([{...}, {...}]), otras la envuelven en un objeto
+        # (ej. Objetiva: {"data": [...], "mascotaCompanero1": null}).
+        # Aceptamos ambas formas para no depender de que todos usen
+        # exactamente el mismo formato de respuesta.
+        if isinstance(cuerpo, list):
+            items = cuerpo
+        elif isinstance(cuerpo, dict) and isinstance(cuerpo.get("data"), list):
+            items = cuerpo["data"]
+        else:
+            logger.warning(
+                f"[trace_id={trace_id}] {origen} respondió un formato inesperado: "
+                f"{type(cuerpo).__name__}"
+            )
+            items = []
+
+        logger.info(f"[trace_id={trace_id}] {origen} respondió OK ({r.status_code}, {len(items)} items)")
+        return origen, items, None
     except Exception as e:
-        logger.error(f"[trace_id={trace_id}] {origen} FALLÓ: {e}")
-        return origen, [], str(e)
+        # str(e) puede venir vacío en errores de timeout/conexión de
+        # httpx, así que si no hay texto, al menos dejamos el tipo de
+        # excepción (ej. "ConnectTimeout", "ReadTimeout") — así el log
+        # y el campo *_error siempre dicen algo útil, nunca quedan en blanco.
+        detalle = str(e) or type(e).__name__
+        logger.error(f"[trace_id={trace_id}] {origen} FALLÓ: {detalle}")
+        return origen, [], detalle
 
 
 async def consultar_remotos(ruta, params, token, trace_id=None):
