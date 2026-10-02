@@ -13,6 +13,12 @@ def crear(juego: schemas.JuegoCreate, db: Session = Depends(get_db)):
     return crud.crear_juego(db, juego)
 
 
+@router.get("/raw", response_model=list[schemas.JuegoResponse])
+def listar_raw(db: Session = Depends(get_db)):
+    juegos = crud.obtener_juegos(db)
+    return juegos
+
+
 @router.get("/")
 async def listar(request: Request, db: Session = Depends(get_db)):
     juegos = crud.obtener_juegos(db)
