@@ -10,7 +10,7 @@ async def obtener_entidades_companeros(request: Request):
 
     (pets, error_pets), (tareas, error_tareas) = await asyncio.gather(
         consultar_uno("aws", "/pets", {}, token, trace_id),
-        consultar_uno("objetiva", "/api/v2/tareas", {}, token, trace_id),
+        consultar_uno("objetiva", "/tareas", {}, token, trace_id),
     )
     pets = [p for p in pets if isinstance(p, dict) and "especie" in p]
 
