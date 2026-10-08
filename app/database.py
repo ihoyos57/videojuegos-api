@@ -15,23 +15,29 @@ if not DATABASE_URL:
 if not DB_SCHEMA.replace("_", "").isalnum():
     raise ValueError("DB_SCHEMA contiene caracteres no permitidos")
 
-engine = engine = create_engine(
-    DATABASE_URL,
-    connect_args={"options": f"-csearch_path={DB_SCHEMA}"},
-    pool_size=3,
-    max_overflow=2,
-)
-
-with engine.connect() as connection:
-    connection.execute(
-        text(f"CREATE SCHEMA IF NOT EXISTS {DB_SCHEMA}")
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
     )
-    connection.commit()
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"options": f"-csearch_path={DB_SCHEMA}"},
+        pool_size=3,
+        max_overflow=2,
+    )
+
+    with engine.connect() as connection:
+        connection.execute(
+            text(f"CREATE SCHEMA IF NOT EXISTS {DB_SCHEMA}")
+        )
+        connection.commit()
 
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=engine,
 )
 
 Base = declarative_base()

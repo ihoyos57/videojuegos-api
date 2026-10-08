@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import schemas, crud
 from app.database import get_db
-from app.enriquecer import obtener_entidades_companeros, agregar_relacionados, construir_respuesta_lista
 
 router = APIRouter(prefix="/juegos", tags=["Juegos"])
 
@@ -15,33 +15,28 @@ def crear(juego: schemas.JuegoCreate, db: Session = Depends(get_db)):
 
 @router.get("/raw", response_model=list[schemas.JuegoResponse])
 def listar_raw(db: Session = Depends(get_db)):
-    juegos = crud.obtener_juegos(db)
-    return juegos
+    return crud.obtener_juegos(db)
 
 
-@router.get("/")
-async def listar(request: Request, db: Session = Depends(get_db)):
-    juegos = crud.obtener_juegos(db)
-    items = [schemas.JuegoResponse.model_validate(j).model_dump() for j in juegos]
-
-    pets, error_pets, tareas, error_tareas = await obtener_entidades_companeros(request)
-    return construir_respuesta_lista("juegos", items, pets, error_pets, tareas, error_tareas)
+@router.get("/", response_model=list[schemas.JuegoResponse])
+def listar(db: Session = Depends(get_db)):
+    return crud.obtener_juegos(db)
 
 
-@router.get("/{juego_id}")
-async def obtener(juego_id: int, request: Request, db: Session = Depends(get_db)):
+@router.get("/{juego_id}", response_model=schemas.JuegoResponse)
+def obtener(juego_id: int, db: Session = Depends(get_db)):
     juego = crud.obtener_juego(db, juego_id)
     if not juego:
         raise HTTPException(status_code=404, detail="Juego no encontrado")
-
-    pets, error_pets, tareas, error_tareas = await obtener_entidades_companeros(request)
-
-    data = schemas.JuegoResponse.model_validate(juego).model_dump()
-    return agregar_relacionados(data, pets, error_pets, tareas, error_tareas)
+    return juego
 
 
 @router.patch("/{juego_id}", response_model=schemas.JuegoResponse)
-def actualizar(juego_id: int, datos: schemas.JuegoUpdate, db: Session = Depends(get_db)):
+def actualizar(
+    juego_id: int,
+    datos: schemas.JuegoUpdate,
+    db: Session = Depends(get_db),
+):
     juego = crud.actualizar_juego(db, juego_id, datos)
     if not juego:
         raise HTTPException(status_code=404, detail="Juego no encontrado")
