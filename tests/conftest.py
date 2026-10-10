@@ -1,5 +1,8 @@
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Las pruebas solo pueden ejecutarse en el esquema de testing.
 os.environ["DB_SCHEMA"] = "schema_testing"
