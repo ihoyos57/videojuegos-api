@@ -3,7 +3,7 @@ variable "project_id" {
 }
 
 variable "secret_id" {
-  type = string
+  type    = string
   default = "videojuegos-db-password"
 }
 
