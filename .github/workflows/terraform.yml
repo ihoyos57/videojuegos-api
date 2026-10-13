@@ -10,11 +10,11 @@ on:
         options:
           - validate
           - plan
-          - destroy
         default: validate
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   terraform:
@@ -25,6 +25,10 @@ jobs:
       run:
         working-directory: terraform
 
+    env:
+      TF_VAR_project_id: videojuegos-api-2026-ihoyos
+      TF_VAR_database_password: ${{ secrets.TF_VAR_database_password }}
+
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -32,15 +36,26 @@ jobs:
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Inicializar Terraform
-        run: terraform init -backend=false
-
       - name: Validar formato
         run: terraform fmt -check -recursive
+
+      - name: Inicializar Terraform sin backend
+        run: terraform init -backend=false
 
       - name: Validar configuración
         run: terraform validate
 
-      - name: Generar plan
+      - name: Autenticar con Google Cloud
+        if: ${{ inputs.action == 'plan' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Inicializar backend remoto
+        if: ${{ inputs.action == 'plan' }}
+        run: terraform init -reconfigure
+
+      - name: Generar plan sin aplicar cambios
         if: ${{ inputs.action == 'plan' }}
         run: terraform plan -input=false
