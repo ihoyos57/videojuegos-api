@@ -1,10 +1,11 @@
-name: CD - Production
+name: CD - Producción
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   test:
@@ -49,3 +50,23 @@ jobs:
       - name: Ejecutar pruebas y exigir cobertura del 85 %
         run: |
           python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+
+  autenticar:
+    name: Verificar autenticación con Google Cloud
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Autenticar con Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Verificar credenciales
+        run: |
+          test -f "$GOOGLE_APPLICATION_CREDENTIALS"
+          echo "Autenticación con Google Cloud configurada correctamente."
