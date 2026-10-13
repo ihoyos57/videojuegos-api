@@ -28,6 +28,9 @@ resource "google_sql_database" "videojuegos" {
   project  = var.project_id
   name     = var.database_name
   instance = google_sql_database_instance.postgres.name
+
+  # La base se elimina junto con la instancia.
+  deletion_policy = "ABANDON"
 }
 
 resource "google_sql_user" "app" {
@@ -35,4 +38,7 @@ resource "google_sql_user" "app" {
   name     = var.database_user
   instance = google_sql_database_instance.postgres.name
   password = var.database_password
+
+  # Un usuario dueño de objetos no se puede borrar por API; se elimina con la instancia.
+  deletion_policy = "ABANDON"
 }
