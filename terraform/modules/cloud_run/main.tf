@@ -7,6 +7,8 @@ resource "google_cloud_run_v2_service" "api" {
   ingress             = "INGRESS_TRAFFIC_ALL"
 
   template {
+    service_account = var.service_account_email
+
     scaling {
       min_instance_count = 0
       max_instance_count = 2
@@ -30,12 +32,23 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name  = "DATABASE_URL"
-        value = "postgresql+psycopg2://${var.database_user}:$(DB_PASSWORD)@/${var.database_name}?host=/cloudsql/${var.database_connection_name}"
+        name  = "DB_USER"
+        value = var.database_user
+      }
+
+      env {
+        name  = "DB_NAME"
+        value = var.database_name
+      }
+
+      env {
+        name  = "INSTANCE_CONNECTION_NAME"
+        value = var.database_connection_name
       }
 
       env {
         name = "DB_PASSWORD"
+
         value_source {
           secret_key_ref {
             secret  = var.database_password_secret
@@ -52,6 +65,7 @@ resource "google_cloud_run_v2_service" "api" {
 
     volumes {
       name = "cloudsql"
+
       cloud_sql_instance {
         instances = [var.database_connection_name]
       }

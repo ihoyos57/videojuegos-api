@@ -38,3 +38,10 @@ variable "container_image" {
   type        = string
   default     = "us-central1-docker.pkg.dev/videojuegos-api-2026-ihoyos/videojuegos-api/api:latest"
 }
+
+variable "database_password" {
+  description = "Contraseña del usuario de PostgreSQL"
+  type        = string
+  sensitive   = true
+}
+
