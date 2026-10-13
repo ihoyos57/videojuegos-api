@@ -1,0 +1,46 @@
+name: Terraform - Infraestructura
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Acción de Terraform"
+        required: true
+        type: choice
+        options:
+          - validate
+          - plan
+          - destroy
+        default: validate
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: Validar infraestructura
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Inicializar Terraform
+        run: terraform init -backend=false
+
+      - name: Validar formato
+        run: terraform fmt -check -recursive
+
+      - name: Validar configuración
+        run: terraform validate
+
+      - name: Generar plan
+        if: ${{ inputs.action == 'plan' }}
+        run: terraform plan -input=false
