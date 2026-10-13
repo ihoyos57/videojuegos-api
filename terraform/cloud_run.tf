@@ -13,7 +13,7 @@ locals {
 
 module "cloud_run" {
   source   = "./modules/cloud_run"
-  for_each = local.environments
+  for_each = var.deploy_cloud_run ? local.environments : {}
 
   project_id               = var.project_id
   region                   = var.region
@@ -25,11 +25,16 @@ module "cloud_run" {
   database_password_secret = module.secret_manager.secret_name
   db_schema                = each.value.db_schema
   environment              = each.key
-  service_account_email    = google_service_account.cloud_run.email
+  service_account_email    = module.iam.runtime_service_account_email
 
   depends_on = [
-    google_project_service.required,
-    google_project_iam_member.cloud_sql_client,
-    google_secret_manager_secret_iam_member.password_access
+    module.apis,
+    module.iam,
   ]
+}
+
+variable "deployer_service_account_email" {
+  description = "Cuenta de servicio de GitHub Actions que despliega en Cloud Run"
+  type        = string
+  default     = "github-actions-deployer@videojuegos-api-2026-ihoyos.iam.gserviceaccount.com"
 }

@@ -45,3 +45,8 @@ variable "database_password" {
   sensitive   = true
 }
 
+variable "deploy_cloud_run" {
+  description = "Indica si se deben desplegar los servicios de Cloud Run"
+  type        = bool
+  default     = false
+}

@@ -10,15 +10,26 @@ on:
         options:
           - validate
           - plan
+          - apply
+          - destroy
         default: validate
+      deploy_cloud_run:
+        description: "Crear los servicios de Cloud Run (requiere que la imagen ya exista)"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
 jobs:
   terraform:
-    name: Validar infraestructura
+    name: Terraform ${{ inputs.action }}
     runs-on: ubuntu-latest
 
     defaults:
@@ -28,34 +39,40 @@ jobs:
     env:
       TF_VAR_project_id: videojuegos-api-2026-ihoyos
       TF_VAR_database_password: ${{ secrets.TF_VAR_database_password }}
+      TF_VAR_deploy_cloud_run: ${{ inputs.deploy_cloud_run }}
 
     steps:
-      - name: Descargar código
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Instalar Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
 
       - name: Validar formato
         run: terraform fmt -check -recursive
 
-      - name: Inicializar Terraform sin backend
-        run: terraform init -backend=false
-
-      - name: Validar configuración
-        run: terraform validate
+      - name: Inicializar sin backend y validar
+        run: |
+          terraform init -backend=false
+          terraform validate
 
       - name: Autenticar con Google Cloud
-        if: ${{ inputs.action == 'plan' }}
+        if: ${{ inputs.action != 'validate' }}
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Inicializar backend remoto
-        if: ${{ inputs.action == 'plan' }}
-        run: terraform init -reconfigure
+        if: ${{ inputs.action != 'validate' }}
+        run: terraform init -reconfigure -input=false
 
-      - name: Generar plan sin aplicar cambios
+      - name: Plan
         if: ${{ inputs.action == 'plan' }}
         run: terraform plan -input=false
+
+      - name: Apply
+        if: ${{ inputs.action == 'apply' }}
+        run: terraform apply -input=false -auto-approve
+
+      - name: Destroy
+        if: ${{ inputs.action == 'destroy' }}
+        run: terraform destroy -input=false -auto-approve

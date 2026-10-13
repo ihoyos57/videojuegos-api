@@ -19,11 +19,11 @@ output "cloud_sql_database_name" {
 }
 
 output "testing_api_url" {
-  description = "URL pública de la API de pruebas"
-  value       = module.cloud_run["testing"].service_url
+  description = "URL pública de la API de pruebas (null si Cloud Run no está desplegado)"
+  value       = try(module.cloud_run["testing"].service_url, null)
 }
 
 output "production_api_url" {
-  description = "URL pública de la API de producción"
-  value       = module.cloud_run["production"].service_url
+  description = "URL pública de la API de producción (null si Cloud Run no está desplegado)"
+  value       = try(module.cloud_run["production"].service_url, null)
 }

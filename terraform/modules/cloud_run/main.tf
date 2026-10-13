@@ -6,6 +6,15 @@ resource "google_cloud_run_v2_service" "api" {
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
 
+  # La imagen la actualizan los pipelines de CI/CD; Terraform no debe revertirla.
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+      client,
+      client_version,
+    ]
+  }
+
   template {
     service_account = var.service_account_email
 

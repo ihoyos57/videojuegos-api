@@ -7,4 +7,6 @@ module "cloud_sql" {
   database_user     = var.database_user
   database_tier     = var.database_tier
   database_password = var.database_password
+
+  depends_on = [module.apis]
 }

@@ -1,5 +1,9 @@
-locals {
-  required_apis = toset([
+module "apis" {
+  source = "./modules/apis"
+
+  project_id = var.project_id
+
+  apis = [
     "artifactregistry.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
@@ -7,14 +11,6 @@ locals {
     "secretmanager.googleapis.com",
     "sqladmin.googleapis.com",
     "cloudresourcemanager.googleapis.com",
-    "serviceusage.googleapis.com"
-  ])
-}
-
-resource "google_project_service" "required" {
-  for_each = local.required_apis
-
-  project            = var.project_id
-  service            = each.value
-  disable_on_destroy = false
+    "serviceusage.googleapis.com",
+  ]
 }

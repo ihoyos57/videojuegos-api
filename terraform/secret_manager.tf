@@ -3,4 +3,6 @@ module "secret_manager" {
 
   project_id   = var.project_id
   secret_value = var.database_password
+
+  depends_on = [module.apis]
 }

@@ -1,4 +1,4 @@
-name: CI - Test
+name: CI/CD - Pruebas
 
 on:
   push:
@@ -9,10 +9,17 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: videojuegos-api-2026-ihoyos
+  REGION: us-central1
+  IMAGE: us-central1-docker.pkg.dev/videojuegos-api-2026-ihoyos/videojuegos-api/api
+  SERVICE: videojuegos-api-testing
 
 jobs:
   test:
-    name: Pruebas y cobertura
+    name: Pruebas y cobertura (>= 60 %)
     runs-on: ubuntu-latest
 
     services:
@@ -35,11 +42,9 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/videojuegos_test
 
     steps:
-      - name: Descargar código
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configurar Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
@@ -48,8 +53,46 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest-cov
+          pip install pytest pytest-cov
 
-      - name: Ejecutar pruebas y verificar cobertura
+      - name: Ejecutar pruebas y exigir cobertura del 60 %
+        run: python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=60
+
+  deploy:
+    name: Desplegar en Pruebas
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Construir y publicar imagen
         run: |
-          python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=60
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Desplegar en Cloud Run (pruebas)
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$IMAGE:${{ github.sha }}"
+
+      - name: Verificar despliegue
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')
+          echo "URL de pruebas: $URL"
+          for i in 1 2 3 4 5; do
+            curl -fsS "$URL/test-db" && exit 0
+            sleep 10
+          done
+          exit 1
