@@ -59,6 +59,7 @@ jobs:
         run: python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=60
 
   deploy:
+    
     name: Desplegar en Pruebas
     needs: test
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -81,13 +82,25 @@ jobs:
           docker push "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:latest"
 
+      - name: Comprobar si el servicio de Cloud Run ya existe
+        id: servicio
+        run: |
+          if gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" >/dev/null 2>&1; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::El servicio $SERVICE aún no existe; solo se publicó la imagen."
+          fi
+
       - name: Desplegar en Cloud Run (pruebas)
+        if: steps.servicio.outputs.existe == 'true'
         run: |
           gcloud run deploy "$SERVICE" \
             --project "$PROJECT_ID" --region "$REGION" \
             --image "$IMAGE:${{ github.sha }}"
 
       - name: Verificar despliegue
+        if: steps.servicio.outputs.existe == 'true'
         run: |
           URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')
           echo "URL de pruebas: $URL"
