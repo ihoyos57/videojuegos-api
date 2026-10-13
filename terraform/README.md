@@ -1,246 +1,120 @@
-\# Infraestructura como código con Terraform
+# Infraestructura como código con Terraform
 
+## 1. Descripción
 
+Configuración de Terraform para aprovisionar en Google Cloud la infraestructura de la API de videojuegos. Cada servicio está en un módulo independiente dentro de `modules/`, y cada archivo de la raíz solo invoca su módulo.
 
-\## 1. Descripción
+## 2. Servicios de Google Cloud
 
+| Servicio | Módulo | Función |
+|---|---|---|
+| Cloud Run | `modules/cloud_run` | Ejecuta la API en pruebas y producción |
+| Cloud SQL | `modules/cloud_sql` | PostgreSQL 16 (edición Enterprise, `db-f1-micro`) |
+| Artifact Registry | `modules/artifact_registry` | Imágenes Docker de la API |
+| Secret Manager | `modules/secret_manager` | Contraseña de la base de datos |
+| IAM | `modules/iam` | Cuenta de servicio de ejecución y permisos |
+| Service Usage | `modules/apis` | Habilita las APIs de Google Cloud necesarias |
+| Cloud Storage | (creado a mano) | Bucket con el estado remoto de Terraform |
 
+## 3. Organización
 
-Este directorio contiene la configuración de Terraform para aprovisionar la infraestructura de la API de videojuegos en Google Cloud.
+```
+terraform/
+├── apis.tf                → module "apis"
+├── artifact_registry.tf   → module "artifact_registry"
+├── cloud_sql.tf           → module "cloud_sql"
+├── cloud_run.tf           → module "cloud_run" (uno por entorno)
+├── iam.tf                 → module "iam"
+├── secret_manager.tf      → module "secret_manager"
+├── variables.tf, outputs.tf, providers.tf, versions.tf, backend.tf
+├── terraform.tfvars.example
+└── modules/
+    └── <servicio>/ main.tf, variables.tf, outputs.tf
+```
 
+El estado se guarda en el bucket `videojuegos-api-2026-ihoyos-tfstate` (ver `backend.tf`).
 
+## 4. Requisitos previos
 
-La infraestructura está organizada en módulos para facilitar su mantenimiento y reutilización.
+- Terraform y Google Cloud CLI instalados.
+- Un proyecto de Google Cloud con facturación activa.
+- Autenticación local: `gcloud auth application-default login`.
 
-
-
-\## 2. Servicios de Google Cloud
-
-
-
-La configuración contempla los siguientes servicios:
-
-
-
-\- \*\*Cloud Run:\*\* ejecución de la API en los entornos de pruebas y producción.
-
-\- \*\*Cloud SQL:\*\* base de datos PostgreSQL.
-
-\- \*\*Artifact Registry:\*\* almacenamiento de imágenes Docker.
-
-\- \*\*Secret Manager:\*\* almacenamiento del secreto de la contraseña de la base de datos.
-
-\- \*\*IAM y cuentas de servicio:\*\* permisos para que la API acceda a los recursos necesarios.
-
-
-
-Los recursos solo se crean cuando se ejecuta una aplicación de Terraform autorizada.
-
-
-
-\## 3. Organización
-
-
-
-\- `main.tf`: conexión de los módulos y configuración general.
-
-\- `variables.tf`: variables de configuración.
-
-\- `providers.tf`: proveedor de Google Cloud.
-
-\- `versions.tf`: versiones de Terraform y del proveedor.
-
-\- `terraform.tfvars.example`: ejemplo de variables.
-
-\- `modules/`: módulos independientes para los servicios de infraestructura.
-
-
-
-\## 4. Requisitos previos
-
-
-
-\- Tener Terraform instalado.
-
-\- Tener Google Cloud CLI instalado.
-
-\- Disponer de un proyecto de Google Cloud con facturación configurada.
-
-\- Tener permisos suficientes para administrar los recursos.
-
-\- Autenticarse con una cuenta autorizada de Google Cloud.
-
-
-
-\## 5. Configuración
-
-
-
-Desde la raíz del repositorio, inicializa Terraform:
-
-
+## 5. Configuración
 
 ```powershell
-
 terraform -chdir=terraform init
-
+Copy-Item terraform\terraform.tfvars.example terraform\terraform.tfvars
 ```
 
+Edita `terraform.tfvars` y cambia `database_password`. Ese archivo está ignorado por Git: nunca publiques contraseñas ni archivos de estado.
 
-
-Crea el archivo local `terraform/terraform.tfvars` a partir de `terraform/terraform.tfvars.example` y configura los valores correspondientes.
-
-
-
-No publiques contraseñas, archivos `.tfvars` con secretos ni archivos de estado en Git.
-
-
-
-\## 6. Validación
-
-
-
-Comprueba el formato:
-
-
+## 6. Validación
 
 ```powershell
-
 terraform -chdir=terraform fmt -check -recursive
-
-```
-
-
-
-Valida la configuración:
-
-
-
-```powershell
-
 terraform -chdir=terraform validate
-
 ```
 
+## 7. Despliegue por etapas
 
+Cloud Run necesita una imagen ya publicada, por eso el despliegue va en dos etapas controladas por la variable `deploy_cloud_run` (por defecto `false`).
 
-Estas comprobaciones no crean infraestructura.
-
-
-
-\## 7. Revisar cambios antes de desplegar
-
-
-
-Después de configurar las credenciales y las variables, genera un plan:
-
-
+**Etapa 1: infraestructura base**
 
 ```powershell
-
 terraform -chdir=terraform plan
-
-```
-
-
-
-Revisa todos los recursos que se crearán, modificarán o eliminarán antes de autorizar cualquier despliegue.
-
-
-
-\## 8. Despliegue de infraestructura
-
-
-
-El despliegue debe realizarse únicamente después de verificar:
-
-
-
-\- El proyecto de Google Cloud seleccionado.
-
-\- Las APIs requeridas y los permisos.
-
-\- Las variables y los secretos.
-
-\- El costo estimado de los recursos.
-
-\- La imagen Docker disponible para Cloud Run.
-
-
-
-Cuando se autorice el despliegue, se puede aplicar el plan revisado:
-
-
-
-```powershell
-
 terraform -chdir=terraform apply
-
 ```
 
+Crea APIs, Artifact Registry, Cloud SQL, Secret Manager e IAM.
 
+**Publicar la imagen:** un `push` a `main` ejecuta el pipeline de pruebas, que construye y publica la imagen en Artifact Registry.
 
-Este comando puede crear recursos facturables. No lo ejecutes sin autorización y revisión previa.
-
-
-
-\## 9. Destrucción de infraestructura
-
-
-
-Para revisar qué recursos se eliminarían:
-
-
+**Etapa 2: Cloud Run**
 
 ```powershell
+terraform -chdir=terraform plan -var deploy_cloud_run=true
+terraform -chdir=terraform apply -var deploy_cloud_run=true
+```
 
+Crea los servicios `videojuegos-api-testing` y `videojuegos-api-production`. Los pipelines actualizan después la imagen; Terraform ignora ese cambio (`ignore_changes`).
+
+## 8. Entornos
+
+| Entorno | Servicio | Esquema PostgreSQL |
+|---|---|---|
+| Pruebas | `videojuegos-api-testing` | `schema_testing` |
+| Producción | `videojuegos-api-production` | `schema_production` |
+
+Ambos usan la misma instancia y base de datos con esquemas separados. La aplicación crea el esquema al arrancar. Las URL se obtienen con:
+
+```powershell
+terraform -chdir=terraform output
+```
+
+## 9. Costos y seguridad
+
+- Cloud SQL genera costo mientras exista. Está configurada sin copias de seguridad y sin protección contra eliminación, a propósito, para poder destruirla al terminar.
+- La instancia tiene IPv4 pública, pero Cloud Run se conecta por el socket `/cloudsql`; no se autoriza ninguna red.
+- La contraseña de la base de datos vive en Secret Manager y en el secreto `TF_VAR_database_password` de GitHub.
+- Los servicios de Cloud Run son públicos (`allUsers`) porque la API no tiene autenticación.
+
+## 10. Destrucción
+
+```powershell
 terraform -chdir=terraform plan -destroy
-
-```
-
-
-
-La eliminación requiere autorización explícita y una revisión de sus consecuencias. Puede eliminar recursos y datos almacenados. Una vez revisado el plan, la destrucción se puede realizar con:
-
-
-
-```powershell
-
 terraform -chdir=terraform destroy
-
 ```
 
+Elimina todos los recursos gestionados y los datos de la base. El bucket del estado no está gestionado por Terraform y debe borrarse aparte si ya no se necesita. Revisa después la facturación de Google Cloud.
 
+## 11. Automatización
 
-Eliminar recursos no garantiza que no existan otros cargos pendientes, almacenamiento residual u otros servicios activos. Comprueba también la sección de facturación de Google Cloud.
+| Workflow | Disparador | Qué hace |
+|---|---|---|
+| `Terraform - Infraestructura` | Manual | `validate`, `plan`, `apply` o `destroy`, con la opción `deploy_cloud_run` |
+| `CI/CD - Pruebas` | Push a `main` | Pruebas (>= 60 %) y despliegue en Pruebas |
+| `CI/CD - Producción` | Manual o al publicar una release | Pruebas (>= 85 %) y despliegue en Producción |
 
-
-
-\## 10. Entornos
-
-
-
-La configuración contempla dos entornos de Cloud Run:
-
-
-
-\- \*\*Pruebas:\*\* servicio `videojuegos-api-testing`, esquema `schema\_testing`.
-
-\- \*\*Producción:\*\* servicio `videojuegos-api-production`, esquema `schema\_production`.
-
-
-
-Ambos están configurados para utilizar la base de datos PostgreSQL definida por Terraform. Antes del despliegue, deben verificarse los permisos y la creación de los esquemas.
-
-
-
-\## 11. Automatización
-
-
-
-El workflow de GitHub Actions `Terraform - Infraestructura` permite validar la configuración y solicitar un plan de Terraform.
-
-
-
-La validación no despliega recursos. Cualquier automatización futura de despliegue o destrucción debe incorporar autenticación segura, revisión del plan y controles de autorización.
-
+Los workflows se autentican con Workload Identity Federation, sin claves de cuenta de servicio guardadas. `plan`, `apply` y `destroy` desde GitHub requieren que la cuenta `github-actions-deployer` tenga permisos adicionales sobre el proyecto y el bucket del estado.
