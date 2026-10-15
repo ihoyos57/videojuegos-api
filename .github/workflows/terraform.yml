@@ -1,23 +1,8 @@
-name: Terraform - Infraestructura
+name: Despliegue - Infraestructura y API
+
 
 on:
   workflow_dispatch:
-    inputs:
-      action:
-        description: "Acción de Terraform"
-        required: true
-        type: choice
-        options:
-          - validate
-          - plan
-          - apply
-          - destroy
-        default: validate
-      deploy_cloud_run:
-        description: "Crear los servicios de Cloud Run (requiere que la imagen ya exista)"
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -27,52 +12,92 @@ concurrency:
   group: terraform
   cancel-in-progress: false
 
+env:
+  PROJECT_ID: videojuegos-api-2026-ihoyos
+  REGION: us-central1
+  IMAGE: us-central1-docker.pkg.dev/videojuegos-api-2026-ihoyos/videojuegos-api/api
+  TF_VAR_project_id: videojuegos-api-2026-ihoyos
+  TF_VAR_database_password: ${{ secrets.TF_VAR_database_password }}
+
 jobs:
-  terraform:
-    name: Terraform ${{ inputs.action }}
+  deploy:
+    name: Terraform + despliegue de la API
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: terraform
-
-    env:
-      TF_VAR_project_id: videojuegos-api-2026-ihoyos
-      TF_VAR_database_password: ${{ secrets.TF_VAR_database_password }}
-      TF_VAR_deploy_cloud_run: ${{ inputs.deploy_cloud_run }}
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: hashicorp/setup-terraform@v3
 
-      - name: Validar formato
-        run: terraform fmt -check -recursive
-
-      - name: Inicializar sin backend y validar
-        run: |
-          terraform init -backend=false
-          terraform validate
-
       - name: Autenticar con Google Cloud
-        if: ${{ inputs.action != 'validate' }}
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
 
-      - name: Inicializar backend remoto
-        if: ${{ inputs.action != 'validate' }}
-        run: terraform init -reconfigure -input=false
+      - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Plan
-        if: ${{ inputs.action == 'plan' }}
-        run: terraform plan -input=false
+      - name: Validar formato, inicializar y validar
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -input=false
+          terraform validate
 
-      - name: Apply
-        if: ${{ inputs.action == 'apply' }}
-        run: terraform apply -input=false -auto-approve
+      # Etapa 1: APIs, Artifact Registry, Cloud SQL, Secret Manager e IAM.
+      # Cloud Run aún no se crea (deploy_cloud_run=false) porque necesita una imagen publicada.
+      - name: Terraform apply - infraestructura base
+        working-directory: terraform
+        run: terraform apply -input=false -auto-approve -var deploy_cloud_run=false
 
-      - name: Destroy
-        if: ${{ inputs.action == 'destroy' }}
-        run: terraform destroy -input=false -auto-approve
+      - name: Iniciar sesión en Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Construir y publicar la imagen de la API
+        run: |
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      # Etapa 2: servicios Cloud Run (pruebas y producción) con la imagen recién publicada.
+      - name: Terraform apply - Cloud Run
+        working-directory: terraform
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var deploy_cloud_run=true \
+            -var "container_image=$IMAGE:${{ github.sha }}"
+
+      # Terraform ignora cambios de imagen (ignore_changes), así que en re-ejecuciones
+      # se fuerza la versión nueva de la API en ambos servicios.
+      - name: Instalar la API en Cloud Run
+        run: |
+          for SERVICE in videojuegos-api-testing videojuegos-api-production; do
+            gcloud run deploy "$SERVICE" \
+              --project "$PROJECT_ID" --region "$REGION" \
+              --image "$IMAGE:${{ github.sha }}"
+          done
+
+      - name: Verificar la API desplegada
+        working-directory: terraform
+        run: |
+          for OUTPUT in testing_api_url production_api_url; do
+            URL=$(terraform output -raw "$OUTPUT")
+            echo "Probando $OUTPUT: $URL"
+            OK=false
+            for i in $(seq 1 10); do
+              if curl -fsS "$URL/test-db"; then OK=true; echo; break; fi
+              echo "Intento $i/10 falló, reintentando en 15 s..."
+              sleep 15
+            done
+            [ "$OK" = true ] || { echo "La API no respondió en $URL"; exit 1; }
+          done
+
+      - name: URLs públicas
+        working-directory: terraform
+        run: terraform output

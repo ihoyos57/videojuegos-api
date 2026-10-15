@@ -1,0 +1,49 @@
+name: Destrucción - Eliminar infraestructura
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Escribe DESTROY para confirmar la eliminación"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    name: Terraform destroy
+    if: ${{ inputs.confirm == 'DESTROY' }}
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_VAR_project_id: videojuegos-api-2026-ihoyos
+      TF_VAR_database_password: ${{ secrets.TF_VAR_database_password }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Autenticar con Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Inicializar Terraform
+        run: terraform init -input=false
+
+      - name: Terraform destroy
+        run: terraform destroy -input=false -auto-approve -var deploy_cloud_run=true
