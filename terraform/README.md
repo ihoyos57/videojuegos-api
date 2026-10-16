@@ -114,7 +114,9 @@ Elimina todos los recursos gestionados y los datos de la base. El bucket del est
 | Workflow | Disparador | Qué hace |
 |---|---|---|
 | `Terraform - Infraestructura` | Manual | `validate`, `plan`, `apply` o `destroy`, con la opción `deploy_cloud_run` |
-| `CI/CD - Pruebas` | Push a `main` | Pruebas (>= 60 %) y despliegue en Pruebas |
-| `CI/CD - Producción` | Manual o al publicar una release | Pruebas (>= 85 %) y despliegue en Producción |
+  ## Infraestructura y despliegue
+
+  La infraestructura en Google Cloud se crea con Terraform (carpeta `terraform/`)
+  y se despliega con GitHub Actions. Ver [terraform/README.md](terraform/README.md).
 
 Los workflows se autentican con Workload Identity Federation, sin claves de cuenta de servicio guardadas. `plan`, `apply` y `destroy` desde GitHub requieren que la cuenta `github-actions-deployer` tenga permisos adicionales sobre el proyecto y el bucket del estado.
