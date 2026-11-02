@@ -1,12 +1,12 @@
-name: Canary - Rollback manual verificado a 100% stable
+name: Canary - Rollback a stable
 
 on:
   workflow_dispatch:
     inputs:
       reason:
-        description: "Motivo del rollback (se guarda en el reporte)"
+        description: Motivo del rollback
         required: true
-        default: "Rollback manual de sustentación"
+        default: Rollback manual
         type: string
 
 permissions:
@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: canary
+  group: videojuegos-canary
   cancel-in-progress: false
 
 env:
@@ -28,24 +28,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Autenticar WIF
-        uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-
       - uses: google-github-actions/setup-gcloud@v2
-
-      - name: Rollback y verificación Cloud Run real
+      - name: Restaurar 100% stable
         env:
-          ROLLBACK_REASON: ${{ inputs.reason }}
-        run: bash scripts/rollback-canary.sh "$ROLLBACK_REASON"
-
-      - name: Publicar reporte, incluso si falla el rollback
+          REASON: ${{ inputs.reason }}
+        run: bash scripts/rollback-canary.sh "$REASON"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: canary-rollback-report
-          path: reports/rollback-*.json
+          path: reports/
           if-no-files-found: ignore

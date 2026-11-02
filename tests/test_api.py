@@ -171,3 +171,29 @@ def test_consulta_test_db(client):
     respuesta = client.get("/test-db")
     assert respuesta.status_code in (200, 500)
 
+
+
+
+def test_headers_identifican_version_y_track(client):
+    respuesta = client.get("/")
+    assert respuesta.headers["X-App-Version"]
+    assert respuesta.headers["X-App-Track"] in ("stable", "canary")
+
+
+def test_rutas_v2_y_v3_conviven(client):
+    v2 = client.get("/api/v2/juegos/")
+    v3 = client.get("/api/v3/juegos/")
+    assert v2.status_code == 200
+    assert v3.status_code == 200
+
+
+def test_funcionalidad_nueva_v3_estado_inventario(client):
+    creado = client.post("/juegos/", json={
+        "nombre": "Juego Canary", "genero": "Aventura",
+        "plataforma": "PC", "precio": 25, "stock": 2
+    })
+    juego_id = creado.json()["id"]
+    respuesta = client.get(f"/api/v3/juegos/{juego_id}/disponibilidad")
+    assert respuesta.status_code == 200
+    assert respuesta.json()["disponible"] is True
+    assert respuesta.json()["estado_inventario"] == "disponible"

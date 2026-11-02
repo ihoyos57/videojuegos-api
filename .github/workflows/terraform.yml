@@ -80,7 +80,13 @@ jobs:
           for SERVICE in videojuegos-api-testing videojuegos-api-production; do
             gcloud run deploy "$SERVICE" \
               --project "$PROJECT_ID" --region "$REGION" \
-              --image "$IMAGE:${{ github.sha }}"
+              --image "$IMAGE:${{ github.sha }}" \
+              --update-env-vars "APP_VERSION=2.0.1,APP_TRACK=stable"
+            if [ "$SERVICE" = "videojuegos-api-production" ]; then
+              REVISION=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestReadyRevisionName)')
+              gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
+                --to-revisions "$REVISION=100" --set-tags "stable=$REVISION"
+            fi
           done
 
       - name: Verificar la API desplegada

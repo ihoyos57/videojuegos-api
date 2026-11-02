@@ -1,40 +1,27 @@
-name: Canary - Promoción progresiva con SLI/SLO quality gate
+name: Canary - Promoción progresiva 10 / 50 / 100
 
 on:
   workflow_dispatch:
     inputs:
-      failure_mode:
-        description: "Modo de demostración; 500/latencia solo en canary"
-        required: true
-        type: choice
-        options: [none, "500", latency]
-        default: none
       bake_seconds:
-        description: "Tiempo mínimo de horneado por etapa (segundos)"
+        description: Tiempo de horneado por etapa
         required: true
         type: choice
         options: ["120", "180", "240"]
         default: "120"
-      concurrency:
-        description: "Concurrencia GET del generador (workers)"
-        required: true
-        type: choice
-        options: ["20", "30", "40"]
-        default: "30"
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: canary
+  group: videojuegos-canary
   cancel-in-progress: false
 
 env:
   PROJECT_ID: videojuegos-api-2026-ihoyos
   REGION: us-central1
   SERVICE: videojuegos-api-production
-  MAX_WAIT_SECONDS: "300"
   GCP_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
 
 jobs:
@@ -42,35 +29,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Exigir tag de release v3.1.0
-        run: |
-          test "$GITHUB_REF" = "refs/tags/v3.1.0" || {
-            echo "Selecciona v3.1.0 para ejecutar el rollout." >&2; exit 1;
-          }
-
-      - name: Autenticar con WIF
-        uses: google-github-actions/auth@v2
+      - name: Exigir release v3.0.0
+        run: test "$GITHUB_REF" = "refs/tags/v3.0.0"
+      - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-
       - uses: google-github-actions/setup-gcloud@v2
-
-      - name: Ejecutar bake, análisis y promoción
+      - name: Ejecutar etapas y horneado
         env:
-          INJECT_FAILURE: ${{ inputs.failure_mode }}
           BAKE_SECONDS: ${{ inputs.bake_seconds }}
-          CONCURRENCY: ${{ inputs.concurrency }}
-          CANARY_FAILURE_TOKEN: ${{ secrets.CANARY_FAILURE_TOKEN }}
-        run: |
-          echo "::add-mask::$CANARY_FAILURE_TOKEN"
-          bash scripts/canary-rollout.sh
-
-      - name: Adjuntar reportes de análisis y rollback
+        run: bash scripts/canary-rollout.sh
+      - name: Adjuntar evidencia
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: canary-rollout-reports
+          name: canary-rollout-report
           path: reports/
           if-no-files-found: ignore
