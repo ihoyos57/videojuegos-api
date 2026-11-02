@@ -1,0 +1,108 @@
+name: Canary - Build y despliegue v3.1.0 con 0% público
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: canary
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: videojuegos-api-2026-ihoyos
+  REGION: us-central1
+  SERVICE: videojuegos-api-production
+  IMAGE: us-central1-docker.pkg.dev/videojuegos-api-2026-ihoyos/videojuegos-api/api
+  CANARY_VERSION: "3.1.0"
+  CANARY_FAILURE_SECRET_NAME: ${{ vars.CANARY_FAILURE_SECRET_NAME || 'canary-failure-token' }}
+  GCP_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
+
+jobs:
+  deploy-canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Exigir código marcado v3.1.0
+        run: |
+          test "$GITHUB_REF" = "refs/tags/v3.1.0" || {
+            echo "Ejecuta este workflow desde el tag v3.1.0." >&2; exit 1;
+          }
+
+      - name: Validar variables y secreto de falla
+        env:
+          CANARY_FAILURE_TOKEN: ${{ secrets.CANARY_FAILURE_TOKEN }}
+        run: |
+          test -n "$GCP_SERVICE_ACCOUNT" || { echo "Configura GCP_DEPLOY_SERVICE_ACCOUNT o GCP_SERVICE_ACCOUNT." >&2; exit 1; }
+          test -n "$CANARY_FAILURE_TOKEN" || { echo "Configura el secreto GitHub CANARY_FAILURE_TOKEN." >&2; exit 1; }
+          test -n "${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}" || { echo "Falta GCP_WORKLOAD_IDENTITY_PROVIDER." >&2; exit 1; }
+          echo "::add-mask::$CANARY_FAILURE_TOKEN"
+
+      - name: Autenticación WIF
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Sincronizar token desde GitHub Secrets a una versión numérica de Secret Manager
+        env:
+          CANARY_FAILURE_TOKEN: ${{ secrets.CANARY_FAILURE_TOKEN }}
+        run: |
+          echo "::add-mask::$CANARY_FAILURE_TOKEN"
+          SECRET_VERSION_RESOURCE="$(printf '%s' "$CANARY_FAILURE_TOKEN" | gcloud secrets versions add "$CANARY_FAILURE_SECRET_NAME" \
+            --project "$PROJECT_ID" --data-file=- --format='value(name)')"
+          CANARY_FAILURE_SECRET_VERSION="${SECRET_VERSION_RESOURCE##*/}"
+          [[ "$CANARY_FAILURE_SECRET_VERSION" =~ ^[0-9]+$ ]] || { echo "No se obtuvo una versión numérica de Secret Manager." >&2; exit 1; }
+          echo "CANARY_FAILURE_SECRET_VERSION=$CANARY_FAILURE_SECRET_VERSION" >> "$GITHUB_ENV"
+
+      - name: Comprobar Stable v2.0.1
+        run: |
+          STABLE_URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json \
+            | jq -r '[.status.traffic[] | select(.tag=="stable") | .url][0] // empty')
+          test -n "$STABLE_URL" || { echo "No existe revisión etiquetada stable." >&2; exit 1; }
+          python3 scripts/verify-revision.py "$STABLE_URL" 2.0.1 stable
+
+      - name: Login a Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Build y publicación canary inmutable
+        run: |
+          IMAGE_TAG="canary-${CANARY_VERSION}-${GITHUB_SHA::12}"
+          docker build --pull -t "$IMAGE:$IMAGE_TAG" .
+          docker push "$IMAGE:$IMAGE_TAG"
+          DIGEST_REF=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE:$IMAGE_TAG")
+          [[ "$DIGEST_REF" =~ ^[^[:space:]]+@sha256:[a-f0-9]{64}$ ]] || {
+            echo "No se obtuvo digest SHA256 verificable." >&2; exit 1;
+          }
+          echo "DIGEST_REF=$DIGEST_REF" >> "$GITHUB_ENV"
+          echo "Imagen publicada por digest: $DIGEST_REF"
+
+      - name: Desplegar revisión canary por digest, 0% público y token desde Secret Manager
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$DIGEST_REF" \
+            --no-traffic --tag canary \
+            --revision-suffix "canary-${{ github.run_number }}-${{ github.run_attempt }}" \
+            --min-instances 1 --max-instances 2 \
+            --update-env-vars "APP_VERSION=$CANARY_VERSION,APP_TRACK=canary,CANARY_FEATURE_ENABLED=true,CANARY_FAILURE_ENABLED=true,CANARY_FAILURE_LATENCY_MS=1500" \
+            --update-secrets "CANARY_FAILURE_TOKEN=${CANARY_FAILURE_SECRET_NAME}:${CANARY_FAILURE_SECRET_VERSION}"
+          bash scripts/set-canary-traffic.sh 0
+
+      - name: Smoke test etapa 0, canary por URL tag
+        env:
+          CANARY_FAILURE_TOKEN: ${{ secrets.CANARY_FAILURE_TOKEN }}
+        run: |
+          echo "::add-mask::$CANARY_FAILURE_TOKEN"
+          bash scripts/smoke-canary.sh
