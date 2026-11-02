@@ -27,19 +27,33 @@ env:
 jobs:
   rollout:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Exigir release v3.0.0
-        run: test "$GITHUB_REF" = "refs/tags/v3.0.0"
-      - uses: google-github-actions/auth@v2
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Exigir release v4.0.1
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" != "refs/tags/v4.0.1" ]]; then
+            echo "Ejecuta este workflow desde el tag v4.0.1." >&2
+            exit 1
+          fi
+
+      - name: Autenticarse en Google Cloud
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configurar Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Ejecutar etapas y horneado
         env:
           BAKE_SECONDS: ${{ inputs.bake_seconds }}
         run: bash scripts/canary-rollout.sh
+
       - name: Adjuntar evidencia
         if: always()
         uses: actions/upload-artifact@v4

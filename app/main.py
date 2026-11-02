@@ -41,8 +41,14 @@ app.include_router(compras.router, prefix="/api/v2")
 app.include_router(jugadores.router, prefix="/api/v3")
 app.include_router(juegos.router, prefix="/api/v3")
 app.include_router(compras.router, prefix="/api/v3")
-
+    
 app.include_router(v3.router, prefix="/api/v3")
+
+if APP_TRACK.strip().lower() == "canary":
+    app.include_router(jugadores.router, prefix="/api/v3")
+    app.include_router(juegos.router, prefix="/api/v3")
+    app.include_router(compras.router, prefix="/api/v3")
+    app.include_router(v3.router, prefix="/api/v3")
 
 @app.get("/")
 def root():

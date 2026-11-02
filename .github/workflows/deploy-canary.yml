@@ -27,8 +27,8 @@ jobs:
 
       - name: Validar tag SemVer
         run: |
-          test "$GITHUB_REF" = "refs/tags/v3.0.0" || {
-            echo "Ejecuta desde el tag v3.0.0." >&2; exit 1;
+          test "$GITHUB_REF" = "refs/tags/v4.0.1" || {
+            echo "Ejecuta desde el tag v4.0.1." >&2; exit 1;
           }
 
       - name: Autenticar en Google Cloud mediante Workload Identity

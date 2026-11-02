@@ -5,7 +5,7 @@ PROJECT_ID="${PROJECT_ID:?}"
 REGION="${REGION:?}"
 SERVICE="${SERVICE:?}"
 BAKE_SECONDS="${BAKE_SECONDS:-120}"
-API_PATH="${API_PATH:-/api/v3/juegos/}"
+API_PATH="${API_PATH:-/api/v2/juegos/}"
 
 mkdir -p reports
 REPORT="reports/canary-rollout-$(date -u +%Y%m%dT%H%M%SZ).json"
