@@ -2,7 +2,7 @@
 
 API RESTful desarrollada en Python con FastAPI para la gestión de una tienda de videojuegos, incluyendo jugadores, catálogo de juegos y compras, con persistencia real en PostgreSQL, pruebas unitarias, contenedores Docker y pipelines de integración continua.
 
-**Versión:** `v1.0.0`
+**Versión:** `v4.0.0` (API v3 canary)
 
 ---
 
@@ -240,4 +240,102 @@ videojuegos-api/
 
 Este proyecto sigue [versionado semántico](https://semver.org/) y utiliza [GitMoji](https://gitmoji.dev/) en todos los commits.
 
-**Versión actual:** `v1.0.0`
+**Versión actual:** `v3.0.0`
+
+
+---
+
+# Canary Deployment — API v2 estable / API v3 canary
+
+## Alcance de esta entrega
+
+La estrategia Canary reutiliza **Google Cloud Run**, Artifact Registry, Cloud SQL y GitHub Actions que ya forman parte de este repositorio. No se cambia el dominio funcional de videojuegos ni se reemplaza su base de datos.
+
+- **Stable:** API `2.0.1`, track `stable`, mantiene el contrato anterior.
+- **Canary:** API `3.0.0`, track `canary`, expone `/api/v3` y la nueva consulta de disponibilidad.
+- Ambas rutas versionadas conviven: `/api/v2` y `/api/v3`. Las rutas originales (`/juegos`, `/jugadores`, `/compras`) se mantienen para no romper consumidores existentes.
+- Todas las respuestas HTTP incluyen `X-App-Version` y `X-App-Track`.
+
+## Arquitectura del despliegue
+
+```mermaid
+flowchart TD
+    U[Clientes] --> CR[Google Cloud Run - videojuegos-api-production]
+    CR -->|100% inicial / etapas 90-10, 50-50, 0-100| R{Traffic splitting}
+    R --> S[Revisión stable - API 2.0.1]
+    R --> C[Revisión canary - API 3.0.0]
+    S --> DB[(Cloud SQL PostgreSQL)]
+    C --> DB
+    GH[GitHub Actions] --> AR[Artifact Registry - imagen por digest SHA256]
+    AR --> C
+    GH -->|gcloud update-traffic| R
+```
+
+**Proveedor:** Google Cloud Platform (GCP), Cloud Run en `us-central1`.
+
+**Enrutamiento:** Cloud Run administra el reparto de tráfico entre revisiones del mismo servicio. La revisión `canary` recibe una URL etiquetada para pruebas de humo en etapa 0, sin tráfico público. GitHub Actions modifica los porcentajes mediante `gcloud run services update-traffic`.
+
+## Plan de etapas y horneado
+
+El workflow manual `.github/workflows/rollout-canary.yml` ejecuta las etapas en orden. El horneado predeterminado es de 120 segundos por etapa y se puede parametrizar a 180 o 240 segundos.
+
+| Etapa | Tráfico stable | Tráfico canary | Acceso / observación |
+|---|---:|---:|---|
+| 0 | 100% | 0% | Pruebas internas por URL etiquetada `canary`; smoke test y cabeceras |
+| 1 | 90% | 10% | 120 s de horneado y comprobación HTTP |
+| 2 | 50% | 50% | 120 s de horneado y comprobación HTTP |
+| 3 | 0% | 100% | Promoción completa y verificación de cabeceras |
+
+El script `scripts/canary-rollout.sh` realiza el reparto, espera el bake time y comprueba disponibilidad. Si falla el control HTTP, devuelve el 100% a la revisión `stable`. El workflow `rollback-canary.yml` permite ejecutar un rollback manual y genera un reporte descargable como artefacto de Actions.
+
+## Versiones y evidencia por petición
+
+| Header HTTP | Stable | Canary |
+|---|---|---|
+| `X-App-Version` | `2.0.1` | `3.0.0` |
+| `X-App-Track` | `stable` | `canary` |
+
+Rutas versionadas:
+- `GET /api/v2/juegos/`, `/api/v2/jugadores/`, `/api/v2/compras/`: contrato estable.
+- `GET /api/v3/juegos/`, `/api/v3/jugadores/`, `/api/v3/compras/`: contrato V3.
+- `GET /api/v3/juegos/{id}/disponibilidad`: nueva funcionalidad V3 que devuelve stock, `disponible`, `estado_inventario` y un mensaje legible.
+
+Para comprobar la versión atendida:
+
+```bash
+curl -i https://URL_DEL_SERVICIO/api/v3/juegos/
+```
+
+Para probar V3 sin tráfico público se utiliza la URL de revisión etiquetada `canary` que publica Cloud Run.
+
+## Compatibilidad de datos: Expand/Contract
+
+La funcionalidad nueva de V3 calcula la disponibilidad a partir de la columna `stock` ya existente. No agrega ni elimina columnas, no cambia tipos, no modifica claves foráneas y no altera las tablas `jugadores`, `juegos` o `compras`.
+
+- **Expand:** se publica el código V3 que lee el esquema actual y calcula el estado de inventario en tiempo de consulta.
+- **Convivencia:** V2 y V3 consultan las mismas columnas y relaciones compatibles con la versión anterior.
+- **Contract:** no se ejecuta una contracción ni una migración destructiva en este release. Cualquier limpieza futura se pospone hasta retirar V2 y dejar de necesitar rollback.
+
+Por tanto, el rollback de tráfico a V2 no depende de revertir cambios de base de datos. La funcionalidad V3 no modifica colas ni caché; el proyecto no incorpora esos componentes.
+
+## Artefacto inmutable y release
+
+La imagen de Canary se publica en Artifact Registry con un tag único basado en el release y el SHA del commit; Cloud Run se despliega usando la referencia `@sha256:...`, no una etiqueta mutable. El tag semántico de Git para esta entrega es `v3.0.0`.
+
+Todos los commits nuevos deben usar GitMoji y mensajes SemVer coherentes, por ejemplo:
+
+```bash
+git add .
+git commit -m ":rocket: implement canary deployment for api v3"
+git tag -a v3.0.0 -m "Release v3.0.0 - Canary Deployment"
+git push origin main --tags
+```
+
+## Workflows
+
+1. `terraform.yml`: despliega la revisión estable y la etiqueta `stable`.
+2. `deploy-canary.yml`: desde el tag `v3.0.0`, construye la imagen por digest, despliega Canary con 0% público y verifica la URL etiquetada.
+3. `rollout-canary.yml`: ejecuta el rollout progresivo parametrizado.
+4. `rollback-canary.yml`: restaura el 100% de tráfico a Stable.
+
+Configura en GitHub Actions las variables `GCP_WORKLOAD_IDENTITY_PROVIDER` y `GCP_DEPLOY_SERVICE_ACCOUNT` (o `GCP_SERVICE_ACCOUNT`), y concede a esa cuenta los permisos necesarios para Cloud Run y Artifact Registry. No almacenes credenciales dentro del repositorio.
