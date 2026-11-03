@@ -9,11 +9,7 @@ from fastapi.responses import JSONResponse
 
 
 async def aplicar_fallo_canary(request: Request) -> JSONResponse | None:
-    """Activa latencia o HTTP 500 solo si la revisión es canary y el token coincide.
-
-    Encabezados: X-Canary-Fault: latency|error y X-Canary-Fault-Token.
-    Debe permanecer deshabilitado por defecto y usar un token secreto.
-    """
+   
     if os.getenv("APP_TRACK", "stable").lower() != "canary":
         return None
     if os.getenv("ENABLE_CANARY_FAULT_INJECTION", "false").lower() != "true":
