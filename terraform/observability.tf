@@ -56,7 +56,7 @@ resource "google_monitoring_alert_policy" "canary_cpu" {
   combiner     = "OR"
 
   conditions {
-    display_name = "Utilización media de CPU superior al 80%"
+    display_name = "Percentil 95 de utilización de CPU superior al 80%"
 
     condition_threshold {
       filter          = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"videojuegos-api-production\" AND resource.labels.revision_name=monitoring.regex.full_match(\".*-v3-.*\") AND metric.type=\"run.googleapis.com/container/cpu/utilizations\""
@@ -66,7 +66,7 @@ resource "google_monitoring_alert_policy" "canary_cpu" {
 
       aggregations {
         alignment_period   = "60s"
-        per_series_aligner = "ALIGN_MEAN"
+        per_series_aligner = "ALIGN_PERCENTILE_95"
       }
 
       trigger {
@@ -86,7 +86,7 @@ resource "google_monitoring_alert_policy" "canary_memory" {
   combiner     = "OR"
 
   conditions {
-    display_name = "Utilización media de memoria superior al 85%"
+    display_name = "Percentil 95 de utilización de memoria superior al 85%"
 
     condition_threshold {
       filter          = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"videojuegos-api-production\" AND resource.labels.revision_name=monitoring.regex.full_match(\".*-v3-.*\") AND metric.type=\"run.googleapis.com/container/memory/utilizations\""
@@ -96,7 +96,7 @@ resource "google_monitoring_alert_policy" "canary_memory" {
 
       aggregations {
         alignment_period   = "60s"
-        per_series_aligner = "ALIGN_MEAN"
+        per_series_aligner = "ALIGN_PERCENTILE_95"
       }
 
       trigger {
