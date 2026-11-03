@@ -1,0 +1,27 @@
+# Umbrales iniciales de quality gate. Ajustar tras medir el baseline real.
+service:
+  name: videojuegos-api-production
+  region: us-central1
+  stable_track: stable
+  canary_track: canary
+  stable_version: "2.x"
+  canary_version: "3.x"
+
+sample:
+  minimum_requests_per_revision: 1000
+  concurrency: 20
+  timeout_seconds: 10
+
+slo:
+  max_5xx_rate: 0.01             # 1%, límite superior Wilson al 95%
+  max_4xx_rate: 0.05             # 5% de respuestas cliente inesperadas en la prueba
+  max_p95_latency_ms: 500
+  max_p95_regression_percent: 20
+  max_cpu_utilization: 0.80
+  max_memory_utilization: 0.85
+
+rollout:
+  stages_percent: [10, 50, 100]
+  bake_seconds: 120
+  abort_on_insufficient_sample: true
+  rollback_to_stable_percent: 100
