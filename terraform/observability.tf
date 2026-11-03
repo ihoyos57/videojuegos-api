@@ -29,7 +29,11 @@ resource "google_monitoring_alert_policy" "canary_latency_p95" {
       trigger { count = 1 }
     }
   }
-  documentation { content = "Revisar el dashboard Videojuegos API - Canary Observability. El quality gate del workflow ejecuta rollback si el canary incumple los SLO." mime_type = "text/markdown" }
+  documentation {
+    content = "Revisar el dashboard Videojuegos API - Canary Observability. El quality gate del workflow ejecuta rollback si el canary incumple los SLO."
+
+    mime_type = "text/markdown"
+  }
   alert_strategy { auto_close = "1800s" }
   depends_on = [google_project_iam_member.cloud_run_metric_writer]
 }
@@ -95,7 +99,10 @@ resource "google_monitoring_alert_policy" "canary_5xx" {
       trigger { count = 1 }
     }
   }
-  documentation { content = "Se detectó una tasa sostenida de respuestas HTTP 5xx. Consultar el dashboard y ejecutar/validar rollback del canary." mime_type = "text/markdown" }
+  documentation {
+    content   = "Se detectó una tasa sostenida de respuestas HTTP 5xx. Consultar el dashboard y ejecutar/validar rollback del canary."
+    mime_type = "text/markdown"
+  }
   alert_strategy { auto_close = "1800s" }
 }
 
