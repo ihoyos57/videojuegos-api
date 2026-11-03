@@ -3,13 +3,16 @@ from sqlalchemy.orm import Session
 
 from app import schemas, crud
 from app.database import get_db
+from app.observability.metrics import registrar_compra_creada
 
 router = APIRouter(prefix="/compras", tags=["Compras"])
 
 
 @router.post("/", response_model=schemas.CompraResponse)
 def crear(compra: schemas.CompraCreate, db: Session = Depends(get_db)):
-    return crud.crear_compra(db, compra)
+    resultado = crud.crear_compra(db, compra)
+    registrar_compra_creada()
+    return resultado
 
 
 @router.get("/", response_model=list[schemas.CompraResponse])

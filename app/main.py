@@ -9,6 +9,7 @@ from app.database import Base, engine
 from app import models
 from app.routers import jugadores, juegos, compras, v3
 from prometheus_fastapi_instrumentator import Instrumentator
+from app.observability.fault_injection import aplicar_fallo_canary
 
 APP_VERSION = os.getenv("APP_VERSION", "2.0.1")
 APP_TRACK = os.getenv("APP_TRACK", "stable")
@@ -17,6 +18,11 @@ app = FastAPI(title="API de Videojuegos", version=APP_VERSION)
 
 @app.middleware("http")
 async def identify_release(request: Request, call_next):
+    fallo = await aplicar_fallo_canary(request)
+    if fallo is not None:
+        fallo.headers["X-App-Version"] = APP_VERSION
+        fallo.headers["X-App-Track"] = APP_TRACK
+        return fallo
     response = await call_next(request)
     response.headers["X-App-Version"] = APP_VERSION
     response.headers["X-App-Track"] = APP_TRACK
@@ -44,11 +50,6 @@ app.include_router(compras.router, prefix="/api/v3")
     
 app.include_router(v3.router, prefix="/api/v3")
 
-if APP_TRACK.strip().lower() == "canary":
-    app.include_router(jugadores.router, prefix="/api/v3")
-    app.include_router(juegos.router, prefix="/api/v3")
-    app.include_router(compras.router, prefix="/api/v3")
-    app.include_router(v3.router, prefix="/api/v3")
 
 @app.get("/")
 def root():
