@@ -8,6 +8,7 @@ module "apis" {
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "run.googleapis.com",
+    "monitoring.googleapis.com",
     "secretmanager.googleapis.com",
     "sqladmin.googleapis.com",
     "cloudresourcemanager.googleapis.com",

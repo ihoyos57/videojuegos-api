@@ -22,6 +22,16 @@ env:
   PROJECT_ID: videojuegos-api-2026-ihoyos
   REGION: us-central1
   SERVICE: videojuegos-api-production
+  CANARY_VERSION: "3.0.0"
+  REQUESTS_PER_REVISION: "1000"
+  CONCURRENCY: "20"
+  MIN_REQUESTS_PER_REVISION: "1000"
+  MAX_5XX_RATE: "0.01"
+  MAX_4XX_RATE: "0.05"
+  MAX_P95_LATENCY_MS: "500"
+  MAX_P95_REGRESSION_PERCENT: "20"
+  MAX_CPU_UTILIZATION: "0.80"
+  MAX_MEMORY_UTILIZATION: "0.85"
   GCP_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
 
 jobs:
@@ -48,6 +58,10 @@ jobs:
 
       - name: Configurar Google Cloud CLI
         uses: google-github-actions/setup-gcloud@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Ejecutar etapas y horneado
         env:

@@ -41,7 +41,8 @@ jobs:
 
       - name: Verificar stable v2 y preparar su etiqueta
         run: |
-          READY=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestReadyRevisionName)')
+          SERVICE_JSON=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json)
+          READY=$(jq -r '[.status.traffic[] | select(.tag=="stable") | .revisionName][0] // ([.status.traffic[] | select(.percent==100) | .revisionName][0] // .status.latestReadyRevisionName)' <<<"$SERVICE_JSON")
           test -n "$READY" || { echo "No existe revisión estable desplegada." >&2; exit 1; }
           gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
             --to-revisions "$READY=100" --set-tags "stable=$READY"
@@ -62,7 +63,7 @@ jobs:
           gcloud run deploy "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
             --image "$IMAGE_DIGEST" --no-traffic --tag canary \
             --revision-suffix "v3-${GITHUB_RUN_NUMBER}" \
-            --update-env-vars "APP_VERSION=$CANARY_VERSION,APP_TRACK=canary"
+            --update-env-vars "APP_VERSION=$CANARY_VERSION,APP_TRACK=canary,ENABLE_CANARY_FAULT_INJECTION=false,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_REGION=$REGION"
           CANARY_REV=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
             --format='value(status.latestReadyRevisionName)')
           test -n "$CANARY_REV"

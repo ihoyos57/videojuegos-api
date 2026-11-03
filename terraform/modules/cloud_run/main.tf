@@ -36,6 +36,16 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+
+      env {
+        name  = "GOOGLE_CLOUD_REGION"
+        value = var.region
+      }
+
+      env {
         name  = "DB_SCHEMA"
         value = var.db_schema
       }
