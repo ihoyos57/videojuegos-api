@@ -2,7 +2,7 @@
 
 API RESTful desarrollada en Python con FastAPI para la gestión de una tienda de videojuegos, incluyendo jugadores, catálogo de juegos y compras, con persistencia real en PostgreSQL, pruebas unitarias, contenedores Docker y pipelines de integración continua.
 
-**Versión:** `v4.0.0` (API v3 canary)
+**Versión:** `v4.0.1` (API v3 canary)
 
 ---
 
@@ -240,7 +240,7 @@ videojuegos-api/
 
 Este proyecto sigue [versionado semántico](https://semver.org/) y utiliza [GitMoji](https://gitmoji.dev/) en todos los commits.
 
-**Versión actual:** `v3.0.0`
+**Versión actual:** `v4.0.1`
 
 
 ---
@@ -320,21 +320,21 @@ Por tanto, el rollback de tráfico a V2 no depende de revertir cambios de base d
 
 ## Artefacto inmutable y release
 
-La imagen de Canary se publica en Artifact Registry con un tag único basado en el release y el SHA del commit; Cloud Run se despliega usando la referencia `@sha256:...`, no una etiqueta mutable. El tag semántico de Git para esta entrega es `v3.0.0`.
+La imagen de Canary se publica en Artifact Registry con un tag único basado en el release y el SHA del commit; Cloud Run se despliega usando la referencia `@sha256:...`, no una etiqueta mutable. El tag semántico de Git para esta entrega es `v4.0.1`.
 
 Todos los commits nuevos deben usar GitMoji y mensajes SemVer coherentes, por ejemplo:
 
 ```bash
 git add .
 git commit -m ":rocket: implement canary deployment for api v3"
-git tag -a v3.0.0 -m "Release v3.0.0 - Canary Deployment"
+git tag -a v4.0.1 -m "Release v4.0.1 - Canary Deployment"
 git push origin main --tags
 ```
 
 ## Workflows
 
 1. `terraform.yml`: despliega la revisión estable y la etiqueta `stable`.
-2. `deploy-canary.yml`: desde el tag `v3.0.0`, construye la imagen por digest, despliega Canary con 0% público y verifica la URL etiquetada.
+2. `deploy-canary.yml`: desde el tag `v4.0.1`, construye la imagen por digest, despliega Canary con 0% público y verifica la URL etiquetada.
 3. `rollout-canary.yml`: ejecuta el rollout progresivo parametrizado.
 4. `rollback-canary.yml`: restaura el 100% de tráfico a Stable.
 
