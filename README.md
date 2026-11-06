@@ -177,34 +177,150 @@ El despliegue utiliza Google Cloud Platform con los siguientes servicios:
 
 ## Diagrama de arquitectura
 
-```mermaid
-flowchart TD
-    U[Clientes y Swagger] --> CR[Google Cloud Run]
 
-    CR --> SPLIT{División de tráfico}
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Inter, Arial, sans-serif",
+    "primaryColor": "#172554",
+    "primaryTextColor": "#F8FAFC",
+    "primaryBorderColor": "#60A5FA",
+    "lineColor": "#64748B",
+    "secondaryColor": "#102A43",
+    "tertiaryColor": "#172554",
+    "clusterBkg": "#F1F5F9",
+    "clusterBorder": "#CBD5E1",
+    "edgeLabelBackground": "#FFFFFF"
+  },
+  "flowchart": {
+    "curve": "basis",
+    "nodeSpacing": 42,
+    "rankSpacing": 55,
+    "htmlLabels": true
+  }
+}}%%
 
-    SPLIT --> ST[Stable - API V2]
-    SPLIT --> CA[Canary - API V3]
+flowchart TB
 
-    ST --> DB[(Cloud SQL PostgreSQL)]
-    CA --> DB
+    subgraph CICD["01 · INTEGRACIÓN Y DESPLIEGUE CONTINUO"]
+        direction LR
+        GH["GitHub Repository<br/>Código + Tag SemVer"]
+        WIF["Workload Identity<br/>Federation"]
+        ACTIONS["GitHub Actions<br/>Build · Test · Deploy"]
+        AR[("Artifact Registry<br/>Imagen Docker<br/>SHA256 Digest")]
 
-    CA --> M[/metrics]
-    ST --> M2[/metrics]
+        GH --> ACTIONS
+        WIF -.->|Autenticación| ACTIONS
+        ACTIONS -->|Build & Push| AR
+    end
 
-    M --> AG[Agente Prometheus]
-    M2 --> AG
+    subgraph GCP["02 · GOOGLE CLOUD PLATFORM · CLOUD RUN"]
+        direction TB
 
-    AG --> GC[Grafana Cloud]
+        CLIENT["Clientes<br/>Swagger / HTTP"]
+        URL["URL pública<br/>videojuegos-api-production"]
+        SPLIT{"TRAFFIC SPLITTING<br/>Distribución progresiva"}
 
-    GH[GitHub Actions] --> AR[Artifact Registry]
-    AR --> CA
+        CLIENT --> URL --> SPLIT
 
-    GH --> SPLIT
+        subgraph REVISIONS["REVISIONES DEL SERVICIO"]
+            direction LR
 
-    GC --> GATE[Quality Gate]
-    GATE --> GH
-```
+            STABLE["STABLE<br/>API V2<br/>APP_TRACK = stable<br/>Revisión anterior"]
+
+            CANARY["CANARY<br/>API V3<br/>APP_TRACK = canary<br/>Nueva funcionalidad"]
+        end
+
+        SPLIT -->|"Porcentaje Stable"| STABLE
+        SPLIT -->|"Porcentaje Canary"| CANARY
+
+        AR -->|"Nueva imagen inmutable"| CANARY
+
+        DB[("CLOUD SQL<br/>PostgreSQL<br/>schema_production")]
+
+        STABLE --> DB
+        CANARY --> DB
+    end
+
+    subgraph OBS["03 · OBSERVABILIDAD · GRAFANA CLOUD"]
+        direction LR
+
+        M1["FastAPI Metrics<br/>Stable · /metrics"]
+        M2["FastAPI Metrics<br/>Canary · /metrics"]
+
+        AGENT1["Prometheus Agent<br/>Stable"]
+        AGENT2["Prometheus Agent<br/>Canary"]
+
+        RW["Prometheus<br/>Remote Write"]
+
+        GRAFANA[("GRAFANA CLOUD<br/>Métricas históricas<br/>SLI / SLO")]
+
+        DASH["Dashboard Canary<br/>Stable vs Canary<br/>Tráfico · Errores · Latencia<br/>CPU · Memoria · Negocio"]
+
+        M1 --> AGENT1
+        M2 --> AGENT2
+
+        AGENT1 --> RW
+        AGENT2 --> RW
+
+        RW --> GRAFANA
+        GRAFANA --> DASH
+    end
+
+    subgraph CONTROL["04 · CONTROL DE CALIDAD Y ROLLBACK"]
+        direction LR
+
+        STRESS["Stress Simulator<br/>Carga concurrente"]
+
+        GATE["Quality Gate<br/>canary-gate.py<br/>Evaluación SLO"]
+
+        DECISION{"Decisión"}
+
+        PROMOTE["PROMOTE<br/>Siguiente etapa"]
+
+        ABORT["ABORT<br/>Regresión detectada"]
+
+        ROLLBACK["Rollback automático<br/>100% Stable<br/>0% Canary"]
+
+        STRESS --> GATE
+        GATE --> DECISION
+
+        DECISION -->|SLO cumplido| PROMOTE
+        DECISION -->|SLO incumplido| ABORT
+
+        ABORT --> ROLLBACK
+    end
+
+    URL -.->|"Generación de carga"| STRESS
+    DASH --> GATE
+
+    PROMOTE -->|"10% → 50% → 100%"| SPLIT
+    ROLLBACK -->|"Restaurar tráfico"| SPLIT
+
+    classDef cicd fill:#1E3A8A,stroke:#60A5FA,color:#FFFFFF,stroke-width:2px
+    classDef cloud fill:#0F766E,stroke:#2DD4BF,color:#FFFFFF,stroke-width:2px
+    classDef stable fill:#166534,stroke:#4ADE80,color:#FFFFFF,stroke-width:2px
+    classDef canary fill:#6B21A8,stroke:#C084FC,color:#FFFFFF,stroke-width:2px
+    classDef database fill:#334155,stroke:#94A3B8,color:#FFFFFF,stroke-width:2px
+    classDef observability fill:#92400E,stroke:#FBBF24,color:#FFFFFF,stroke-width:2px
+    classDef controller fill:#1E40AF,stroke:#93C5FD,color:#FFFFFF,stroke-width:2px
+    classDef danger fill:#991B1B,stroke:#F87171,color:#FFFFFF,stroke-width:2px
+
+    class GH,WIF,ACTIONS,AR cicd
+    class CLIENT,URL,SPLIT cloud
+    class STABLE stable
+    class CANARY canary
+    class DB database
+    class M1,M2,AGENT1,AGENT2,RW,GRAFANA,DASH observability
+    class STRESS,GATE,DECISION,PROMOTE controller
+    class ABORT,ROLLBACK danger
+
+    style CICD fill:#EFF6FF,stroke:#60A5FA,stroke-width:2px
+    style GCP fill:#F0FDFA,stroke:#2DD4BF,stroke-width:2px
+    style REVISIONS fill:#ECFDF5,stroke:#86EFAC,stroke-width:1px
+    style OBS fill:#FFFBEB,stroke:#FBBF24,stroke-width:2px
+    style CONTROL fill:#EFF6FF,stroke:#93C5FD,stroke-width:2px
+
 
 Las dos revisiones utilizan la misma base de datos de producción.
 
