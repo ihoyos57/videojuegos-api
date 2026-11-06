@@ -1,27 +1,90 @@
-# Umbrales iniciales de quality gate. Ajustar tras medir el baseline real.
+# Umbrales de decisión del despliegue canary (SLO). Se versionan en el repositorio
+# y se definen ANTES de desplegar. La puerta de análisis (paso 5) lee este archivo
+# y consulta las métricas en Grafana Cloud con las expresiones PromQL de abajo.
+#
+# Cada métrica tiene dos umbrales que dividen el resultado en tres zonas:
+#   valor <= promote_max            -> zona de PROMOCIÓN
+#   promote_max < valor <= abort_max -> zona de PAUSA (se espera y se vuelve a evaluar)
+#   valor > abort_max               -> zona de ABORTO (rollback a 100% stable)
+#
+# Decisión final de cada evaluación:
+#   1. Muestra insuficiente (sample)                 -> PAUSA
+#   2. Cualquier métrica en zona de aborto           -> ABORTAR
+#   3. Todas las métricas en zona de promoción       -> PROMOVER a la siguiente etapa
+#   4. En cualquier otro caso                        -> PAUSA
+#   Si se agotan los reintentos de pausa             -> ABORTAR
+#
+# Valores iniciales: ajustar tras medir el baseline real de stable.
+
 service:
-  name: videojuegos-api-production
+  name: videojuegos-api-production      # etiqueta `service` en Grafana
   region: us-central1
-  stable_track: stable
-  canary_track: canary
-  stable_version: "2.x"
-  canary_version: "3.x"
+  stable_track: stable                  # etiqueta `track` del baseline (v2)
+  canary_track: canary                  # etiqueta `track` de la versión nueva (v3)
 
-sample:
-  minimum_requests_per_revision: 1000
-  concurrency: 20
-  timeout_seconds: 10
-
-slo:
-  max_5xx_rate: 0.01             # 1%, límite superior Wilson al 95%
-  max_4xx_rate: 0.05             # 5% de respuestas cliente inesperadas en la prueba
-  max_p95_latency_ms: 500
-  max_p95_regression_percent: 20
-  max_cpu_utilization: 0.80
-  max_memory_utilization: 0.85
+# Límites del contenedor en Cloud Run (valores por defecto del servicio).
+# Se usan para convertir CPU y memoria en porcentaje de saturación.
+# Mantener sincronizados con el despliegue.
+container:
+  cpu_cores: 1
+  memory_bytes: 536870912               # 512 MiB
 
 rollout:
   stages_percent: [10, 50, 100]
-  bake_seconds: 120
-  abort_on_insufficient_sample: true
+  bake_seconds: 120                     # tiempo mínimo de observación por etapa
+  scrape_settle_seconds: 45             # espera tras la carga para que Grafana reciba las últimas muestras
+  evaluation_window: 3m                 # ventana de las consultas de cada etapa
   rollback_to_stable_percent: 100
+
+# Muestra mínima por etapa: sin ella la decisión no es representativa.
+sample:
+  min_requests_canary: 200
+  min_requests_stable: 100              # necesario solo para la comparación contra el baseline
+  abort_on_insufficient_sample: true    # si tras los reintentos sigue faltando muestra -> abortar
+
+# Zona de pausa
+pause:
+  retry_seconds: 60
+  max_retries: 3
+
+# Señales doradas y saturación del canary
+slo:
+  error_rate_5xx:                       # fracción de peticiones con 5xx
+    promote_max: 0.005
+    abort_max: 0.01
+  error_rate_4xx:                       # fracción de peticiones con 4xx
+    promote_max: 0.02
+    abort_max: 0.05
+  latency_p95_ms:
+    promote_max: 400
+    abort_max: 500
+  latency_p95_regression_percent:       # canary vs baseline (stable) bajo la misma carga
+    promote_max: 20
+    abort_max: 40
+    min_abs_diff_ms: 50                 # ignora diferencias menores a 50 ms (ruido)
+  cpu_utilization:                      # máximo entre instancias del canary
+    promote_max: 0.70
+    abort_max: 0.80
+  memory_utilization:                   # máximo entre instancias del canary
+    promote_max: 0.75
+    abort_max: 0.85
+
+# Consultas PromQL (Grafana Cloud). Marcadores: {{track}}, {{service}}, {{window}},
+# {{cpu_cores}}, {{memory_bytes}}. Cada consulta devuelve un valor único.
+queries:
+  requests: >-
+    sum(increase(http_requests_total{service="{{service}}",track="{{track}}"}[{{window}}]))
+  requests_5xx: >-
+    sum(increase(http_requests_total{service="{{service}}",track="{{track}}",status="5xx"}[{{window}}]))
+  requests_4xx: >-
+    sum(increase(http_requests_total{service="{{service}}",track="{{track}}",status="4xx"}[{{window}}]))
+  latency_p50_ms: >-
+    1000 * histogram_quantile(0.50, sum by (le) (increase(http_request_duration_highr_seconds_bucket{service="{{service}}",track="{{track}}"}[{{window}}])))
+  latency_p95_ms: >-
+    1000 * histogram_quantile(0.95, sum by (le) (increase(http_request_duration_highr_seconds_bucket{service="{{service}}",track="{{track}}"}[{{window}}])))
+  latency_p99_ms: >-
+    1000 * histogram_quantile(0.99, sum by (le) (increase(http_request_duration_highr_seconds_bucket{service="{{service}}",track="{{track}}"}[{{window}}])))
+  cpu_utilization: >-
+    max(rate(process_cpu_seconds_total{service="{{service}}",track="{{track}}"}[2m])) / {{cpu_cores}}
+  memory_utilization: >-
+    max(process_resident_memory_bytes{service="{{service}}",track="{{track}}"}) / {{memory_bytes}}
