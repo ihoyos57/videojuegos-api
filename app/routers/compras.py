@@ -11,7 +11,7 @@ router = APIRouter(prefix="/compras", tags=["Compras"])
 @router.post("/", response_model=schemas.CompraResponse)
 def crear(compra: schemas.CompraCreate, db: Session = Depends(get_db)):
     resultado = crud.crear_compra(db, compra)
-    registrar_compra_creada()
+    registrar_compra_creada(getattr(resultado, "total", None))
     return resultado
 
 

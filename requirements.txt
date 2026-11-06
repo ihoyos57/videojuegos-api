@@ -8,6 +8,4 @@ pydantic
 email-validator==2.3.0
 httpx
 prometheus-fastapi-instrumentator
-
-
-google-cloud-monitoring==2.28.0
+prometheus-client
