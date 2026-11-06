@@ -1,0 +1,31 @@
+# Plantilla del agente que empuja las métricas de esta instancia a Grafana Cloud.
+# start.sh sustituye los marcadores __X__ al arrancar el contenedor.
+# Las etiquetas externas son las que separan stable de canary en Grafana.
+global:
+  scrape_interval: 15s
+  external_labels:
+    service: "__SERVICE__"
+    track: "__TRACK__"
+    app_version: "__VERSION__"
+    revision: "__REVISION__"
+
+remote_write:
+  - url: "__RW_URL__"
+    basic_auth:
+      username: "__RW_USER__"
+      password_file: /tmp/grafana-token
+    queue_config:
+      max_samples_per_send: 2000
+
+scrape_configs:
+  - job_name: videojuegos-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["127.0.0.1:__PORT__"]
+        labels:
+          instance: "__INSTANCE__"   # id único por instancia de Cloud Run
+    # Solo se envía lo necesario (el plan gratuito admite ~10k series activas).
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "http_requests_total|http_request_duration_highr_seconds_.*|http_request_duration_seconds_.*|process_cpu_seconds_total|process_resident_memory_bytes|videojuegos_(compras_creadas_total|ventas_monto_total|app_info|memory_limit_bytes|cpu_limit_cores)"
+        action: keep

@@ -18,6 +18,8 @@ env:
   IMAGE: us-central1-docker.pkg.dev/videojuegos-api-2026-ihoyos/videojuegos-api/api
   TF_VAR_project_id: videojuegos-api-2026-ihoyos
   TF_VAR_database_password: ${{ secrets.TF_VAR_database_password }}
+  GRAFANA_REMOTE_WRITE_URL: https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom/push
+  GRAFANA_METRICS_USER: "3617508"
 
 jobs:
   deploy:
@@ -76,12 +78,21 @@ jobs:
       # Terraform ignora cambios de imagen (ignore_changes), así que en re-ejecuciones
       # se fuerza la versión nueva de la API en ambos servicios.
       - name: Instalar la API en Cloud Run
+        env:
+          GRAFANA_METRICS_TOKEN: ${{ secrets.GRAFANA_METRICS_WRITE_TOKEN }}
         run: |
           for SERVICE in videojuegos-api-testing videojuegos-api-production; do
+            ENV_VARS="APP_VERSION=2.0.1,APP_TRACK=stable"
+            EXTRA_FLAGS=""
+            if [ "$SERVICE" = "videojuegos-api-production" ]; then
+              # Solo producción envía métricas a Grafana; el agente necesita CPU siempre asignada.
+              ENV_VARS="$ENV_VARS,GRAFANA_REMOTE_WRITE_URL=$GRAFANA_REMOTE_WRITE_URL,GRAFANA_METRICS_USER=$GRAFANA_METRICS_USER,GRAFANA_METRICS_TOKEN=$GRAFANA_METRICS_TOKEN"
+              EXTRA_FLAGS="--no-cpu-throttling"
+            fi
             gcloud run deploy "$SERVICE" \
               --project "$PROJECT_ID" --region "$REGION" \
               --image "$IMAGE:${{ github.sha }}" \
-              --update-env-vars "APP_VERSION=2.0.1,APP_TRACK=stable"
+              --update-env-vars "$ENV_VARS" $EXTRA_FLAGS
             if [ "$SERVICE" = "videojuegos-api-production" ]; then
               REVISION=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestReadyRevisionName)')
               gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \

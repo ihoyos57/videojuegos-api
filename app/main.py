@@ -28,7 +28,7 @@ async def identify_release(request: Request, call_next):
     response.headers["X-App-Track"] = APP_TRACK
     return response
 
-Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+Instrumentator(excluded_handlers=["/metrics"]).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # Mantiene el esquema existente. La funcionalidad V3 no requiere cambios destructivos
 # ni nuevas columnas: el estado de inventario se calcula a partir de stock.
