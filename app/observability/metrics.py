@@ -1,64 +1,74 @@
-"""Métrica de negocio acumulativa enviada a Cloud Monitoring por instancia."""
+﻿"""Métricas Prometheus propias del servicio (se envían a Grafana Cloud vía Alloy).
+
+Alloy raspa /metrics dentro de la instancia y añade las etiquetas track,
+app_version y revision, por lo que aquí no hace falta etiquetar por versión.
+
+Señales cubiertas:
+  - Tráfico, errores y latencia: las expone prometheus_fastapi_instrumentator.
+  - Saturación: process_cpu_seconds_total / process_resident_memory_bytes
+    (colectores por defecto) + límites del contenedor (cgroup) definidos abajo.
+  - Negocio: videojuegos_compras_creadas_total y videojuegos_ventas_monto_total.
+"""
 from __future__ import annotations
 
-import logging
 import os
-import socket
-import threading
-from datetime import datetime, timezone
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
-_PROCESS_START = datetime.now(timezone.utc)
-_PURCHASE_COUNT = 0
-_LOCK = threading.Lock()
+from prometheus_client import Counter, Gauge
+
+COMPRAS_CREADAS = Counter(
+    "videojuegos_compras_creadas_total",
+    "Compras confirmadas correctamente por esta instancia.",
+)
+VENTAS_MONTO = Counter(
+    "videojuegos_ventas_monto_total",
+    "Suma del total (moneda del catálogo) de las compras confirmadas.",
+)
+
+APP_INFO = Gauge(
+    "videojuegos_app_info",
+    "Identidad de la revisión en ejecución (valor siempre 1).",
+    ["app_version", "track", "revision"],
+)
+APP_INFO.labels(
+    app_version=os.getenv("APP_VERSION", "unknown"),
+    track=os.getenv("APP_TRACK", "stable"),
+    revision=os.getenv("K_REVISION", "local"),
+).set(1)
 
 
-def registrar_compra_creada() -> None:
-    """Incrementa compras confirmadas y publica el acumulado de esta instancia.
+def _memory_limit_bytes() -> float:
+    """Límite de memoria del contenedor (cgroup v2, luego v1). 0 si no hay límite."""
+    for path in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            raw = Path(path).read_text().strip()
+        except OSError:
+            continue
+        if raw.isdigit() and int(raw) < 1 << 60:
+            return float(raw)
+    return 0.0
 
-    Cada instancia de Cloud Run tiene su propia serie temporal (generic_task),
-    evitando intervalos DELTA solapados cuando llegan compras concurrentes.
-    """
-    global _PURCHASE_COUNT
-    project_id = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT") or os.getenv("PROJECT_ID")
-    if not project_id:
-        logger.debug("Sin proyecto GCP: se omite la métrica de compra.")
-        return
 
+def _cpu_limit_cores() -> float:
+    """Límite de CPU del contenedor en núcleos (cgroup v2). 0 si no hay límite."""
     try:
-        from google.cloud import monitoring_v3
-        from google.protobuf.timestamp_pb2 import Timestamp
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if quota != "max":
+            return int(quota) / int(period)
+    except (OSError, ValueError):
+        pass
+    return 0.0
 
-        with _LOCK:
-            _PURCHASE_COUNT += 1
-            current_count = _PURCHASE_COUNT
-            now = datetime.now(timezone.utc)
 
-            client = monitoring_v3.MetricServiceClient()
-            start = Timestamp()
-            start.FromDatetime(_PROCESS_START)
-            end = Timestamp()
-            end.FromDatetime(now)
+Gauge("videojuegos_memory_limit_bytes", "Límite de memoria del contenedor.").set_function(_memory_limit_bytes)
+Gauge("videojuegos_cpu_limit_cores", "Límite de CPU del contenedor en núcleos.").set_function(_cpu_limit_cores)
 
-            series = monitoring_v3.TimeSeries()
-            series.metric.type = "custom.googleapis.com/videojuegos/compras_creadas"
-            series.metric.labels["app_version"] = os.getenv("APP_VERSION", "unknown")
-            series.metric.labels["track"] = os.getenv("APP_TRACK", "stable")
-            series.resource.type = "generic_task"
-            series.resource.labels["project_id"] = project_id
-            series.resource.labels["location"] = os.getenv("GOOGLE_CLOUD_REGION", "us-central1")
-            series.resource.labels["namespace"] = os.getenv("K_SERVICE", "videojuegos-api")
-            series.resource.labels["job"] = os.getenv("K_REVISION", "local")
-            series.resource.labels["task_id"] = os.getenv("HOSTNAME", socket.gethostname())
 
-            point = monitoring_v3.Point()
-            point.interval.start_time = start
-            point.interval.end_time = end
-            point.value.int64_value = current_count
-            series.points.append(point)
-            series.metric_kind = monitoring_v3.MetricDescriptor.MetricKind.CUMULATIVE
-            series.value_type = monitoring_v3.MetricDescriptor.ValueType.INT64
-            client.create_time_series(name=f"projects/{project_id}", time_series=[series], timeout=3.0)
-    except Exception:
-        # La compra ya fue confirmada: un fallo de telemetría no revierte negocio.
-        logger.exception("No fue posible enviar compras_creadas a Cloud Monitoring.")
+def registrar_compra_creada(total: float | None = None) -> None:
+    """Incrementa las métricas de negocio. Nunca lanza: la compra ya fue confirmada."""
+    COMPRAS_CREADAS.inc()
+    if total is not None:
+        try:
+            VENTAS_MONTO.inc(float(total))
+        except (TypeError, ValueError):
+            pass
