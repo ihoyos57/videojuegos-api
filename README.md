@@ -178,28 +178,8 @@ El despliegue utiliza Google Cloud Platform con los siguientes servicios:
 ## Diagrama de arquitectura
 
 
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "fontFamily": "Inter, Arial, sans-serif",
-    "primaryColor": "#172554",
-    "primaryTextColor": "#F8FAFC",
-    "primaryBorderColor": "#60A5FA",
-    "lineColor": "#64748B",
-    "secondaryColor": "#102A43",
-    "tertiaryColor": "#172554",
-    "clusterBkg": "#F1F5F9",
-    "clusterBorder": "#CBD5E1",
-    "edgeLabelBackground": "#FFFFFF"
-  },
-  "flowchart": {
-    "curve": "basis",
-    "nodeSpacing": 42,
-    "rankSpacing": 55,
-    "htmlLabels": true
-  }
-}}%%
 
+```mermaid
 flowchart TB
 
     subgraph CICD["01 · INTEGRACIÓN Y DESPLIEGUE CONTINUO"]
@@ -225,18 +205,16 @@ flowchart TB
 
         subgraph REVISIONS["REVISIONES DEL SERVICIO"]
             direction LR
-
-            STABLE["STABLE<br/>API V2<br/>APP_TRACK = stable<br/>Revisión anterior"]
-
-            CANARY["CANARY<br/>API V3<br/>APP_TRACK = canary<br/>Nueva funcionalidad"]
+            STABLE["STABLE<br/>API V2<br/>Track: stable"]
+            CANARY["CANARY<br/>API V3<br/>Track: canary"]
         end
 
-        SPLIT -->|"Porcentaje Stable"| STABLE
-        SPLIT -->|"Porcentaje Canary"| CANARY
+        SPLIT -->|Porcentaje Stable| STABLE
+        SPLIT -->|Porcentaje Canary| CANARY
 
-        AR -->|"Nueva imagen inmutable"| CANARY
+        AR -->|Imagen inmutable| CANARY
 
-        DB[("CLOUD SQL<br/>PostgreSQL<br/>schema_production")]
+        DB[("CLOUD SQL<br/>PostgreSQL")]
 
         STABLE --> DB
         CANARY --> DB
@@ -245,24 +223,22 @@ flowchart TB
     subgraph OBS["03 · OBSERVABILIDAD · GRAFANA CLOUD"]
         direction LR
 
-        M1["FastAPI Metrics<br/>Stable · /metrics"]
-        M2["FastAPI Metrics<br/>Canary · /metrics"]
+        M1["Métricas FastAPI<br/>Stable · /metrics"]
+        M2["Métricas FastAPI<br/>Canary · /metrics"]
 
         AGENT1["Prometheus Agent<br/>Stable"]
         AGENT2["Prometheus Agent<br/>Canary"]
 
         RW["Prometheus<br/>Remote Write"]
 
-        GRAFANA[("GRAFANA CLOUD<br/>Métricas históricas<br/>SLI / SLO")]
+        GRAFANA[("GRAFANA CLOUD<br/>Métricas · SLI · SLO")]
 
         DASH["Dashboard Canary<br/>Stable vs Canary<br/>Tráfico · Errores · Latencia<br/>CPU · Memoria · Negocio"]
 
         M1 --> AGENT1
         M2 --> AGENT2
-
         AGENT1 --> RW
         AGENT2 --> RW
-
         RW --> GRAFANA
         GRAFANA --> DASH
     end
@@ -271,31 +247,25 @@ flowchart TB
         direction LR
 
         STRESS["Stress Simulator<br/>Carga concurrente"]
-
         GATE["Quality Gate<br/>canary-gate.py<br/>Evaluación SLO"]
-
         DECISION{"Decisión"}
 
         PROMOTE["PROMOTE<br/>Siguiente etapa"]
-
         ABORT["ABORT<br/>Regresión detectada"]
-
         ROLLBACK["Rollback automático<br/>100% Stable<br/>0% Canary"]
 
         STRESS --> GATE
         GATE --> DECISION
-
         DECISION -->|SLO cumplido| PROMOTE
         DECISION -->|SLO incumplido| ABORT
-
         ABORT --> ROLLBACK
     end
 
-    URL -.->|"Generación de carga"| STRESS
+    URL -.->|Generación de carga| STRESS
     DASH --> GATE
 
-    PROMOTE -->|"10% → 50% → 100%"| SPLIT
-    ROLLBACK -->|"Restaurar tráfico"| SPLIT
+    PROMOTE -->|10% → 50% → 100%| SPLIT
+    ROLLBACK -->|Restaurar tráfico| SPLIT
 
     classDef cicd fill:#1E3A8A,stroke:#60A5FA,color:#FFFFFF,stroke-width:2px
     classDef cloud fill:#0F766E,stroke:#2DD4BF,color:#FFFFFF,stroke-width:2px
@@ -320,6 +290,7 @@ flowchart TB
     style REVISIONS fill:#ECFDF5,stroke:#86EFAC,stroke-width:1px
     style OBS fill:#FFFBEB,stroke:#FBBF24,stroke-width:2px
     style CONTROL fill:#EFF6FF,stroke:#93C5FD,stroke-width:2px
+```
 
 
 Las dos revisiones utilizan la misma base de datos de producción.
