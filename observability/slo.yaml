@@ -33,14 +33,14 @@ rollout:
   stages_percent: [10, 50, 100]
   bake_seconds: 120                     # tiempo mínimo de observación por etapa
   scrape_settle_seconds: 45             # espera tras la carga para que Grafana reciba las últimas muestras
-  evaluation_window: 3m                 # ventana de las consultas de cada etapa
+  evaluation_window: 5m                 # ventana de respaldo; normalmente la ventana es el tiempo transcurrido de la etapa
   rollback_to_stable_percent: 100
 
 # Muestra mínima por etapa: sin ella la decisión no es representativa.
+# Si tras los reintentos de pausa sigue faltando muestra, se aborta.
 sample:
   min_requests_canary: 200
   min_requests_stable: 100              # necesario solo para la comparación contra el baseline
-  abort_on_insufficient_sample: true    # si tras los reintentos sigue faltando muestra -> abortar
 
 # Zona de pausa
 pause:
@@ -85,6 +85,6 @@ queries:
   latency_p99_ms: >-
     1000 * histogram_quantile(0.99, sum by (le) (increase(http_request_duration_highr_seconds_bucket{service="{{service}}",track="{{track}}"}[{{window}}])))
   cpu_utilization: >-
-    max(rate(process_cpu_seconds_total{service="{{service}}",track="{{track}}"}[2m])) / {{cpu_cores}}
+    max(max_over_time(rate(process_cpu_seconds_total{service="{{service}}",track="{{track}}"}[1m])[{{window}}:15s])) / {{cpu_cores}}
   memory_utilization: >-
-    max(process_resident_memory_bytes{service="{{service}}",track="{{track}}"}) / {{memory_bytes}}
+    max(max_over_time(process_resident_memory_bytes{service="{{service}}",track="{{track}}"}[{{window}}])) / {{memory_bytes}}

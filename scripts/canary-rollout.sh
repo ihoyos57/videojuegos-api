@@ -20,10 +20,8 @@ EXPECTED_CANARY_VERSION="${CANARY_VERSION:-3.0.0}"
 STAGES="${STAGES:-10 50 100}"
 export STRESS_REQUESTS="${STRESS_REQUESTS:-600}"
 export STRESS_RAMP="${STRESS_RAMP:-5,10,20}"
-export MAX_5XX_RATE="${MAX_5XX_RATE:-0.01}"
-export MAX_4XX_RATE="${MAX_4XX_RATE:-0.05}"
-export MAX_P95_LATENCY_MS="${MAX_P95_LATENCY_MS:-500}"
-export MAX_P95_REGRESSION_PERCENT="${MAX_P95_REGRESSION_PERCENT:-20}"
+# Umbrales de aborto del simulador: la única fuente de verdad es observability/slo.yaml.
+eval "$(python scripts/canary-gate.py --print-env)"
 
 mkdir -p reports
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -117,6 +115,12 @@ for PERCENT in $STAGES; do
   # El estrés corre sobre la URL pública mientras el tráfico ya está repartido.
   if ! run_stress "$STAGE" "$PERCENT"; then
     back_to_stage_0 "$STAGE" "simulador de estrés falló (errores, lentitud o reparto incorrecto)"
+    exit 1
+  fi
+  # Puerta de análisis: decide promover/abortar con las métricas de Grafana Cloud
+  # y los umbrales de observability/slo.yaml (stable vs canary).
+  if ! python scripts/canary-gate.py --stage "$STAGE" --canary-percent "$PERCENT" --stage-start "$START"; then
+    back_to_stage_0 "$STAGE" "la puerta de análisis (Grafana) decidió abortar"
     exit 1
   fi
   # Horneado: completa el tiempo mínimo de observación de la etapa.

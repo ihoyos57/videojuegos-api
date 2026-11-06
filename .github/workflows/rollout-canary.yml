@@ -46,10 +46,9 @@ env:
   PROJECT_ID: videojuegos-api-2026-ihoyos
   REGION: us-central1
   SERVICE: videojuegos-api-production
-  MAX_5XX_RATE: "0.01"
-  MAX_4XX_RATE: "0.05"
-  MAX_P95_LATENCY_MS: "500"
-  MAX_P95_REGRESSION_PERCENT: "20"
+  GRAFANA_PROM_URL: https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom
+  GRAFANA_METRICS_USER: "3617508"
+  GRAFANA_URL: https://tanreed352.grafana.net
   GCP_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
 
 jobs:
@@ -82,8 +81,13 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Instalar dependencias de la puerta de análisis
+        run: pip install pyyaml
+
       - name: Ejecutar etapas y horneado
         env:
+          GRAFANA_METRICS_READ_TOKEN: ${{ secrets.GRAFANA_METRICS_READ_TOKEN }}
+          GRAFANA_API_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
           BAKE_SECONDS: ${{ inputs.bake_seconds }}
           STAGES: ${{ inputs.stages }}
           STRESS_REQUESTS: ${{ inputs.stress_requests }}
