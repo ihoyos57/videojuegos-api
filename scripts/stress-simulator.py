@@ -84,6 +84,10 @@ def hit(base: str, path: str, extra: dict | None = None) -> tuple[int, float, st
 
 def summarize(samples: list[tuple[int, float, str]]) -> dict:
     total = len(samples)
+    if total == 0:
+        return {"requests": 0, "http_2xx": 0, "http_4xx": 0, "http_5xx_or_network": 0,
+                "rate_4xx": 0.0, "rate_5xx": 0.0, "rate_5xx_wilson_upper_95": 0.0,
+                "p50_ms": None, "p95_ms": None, "p99_ms": None}
     lat = [s[1] for s in samples]
     e5 = sum(s[0] >= 500 for s in samples)
     e4 = sum(400 <= s[0] < 500 for s in samples)
@@ -143,6 +147,13 @@ def main() -> int:
     phases = [int(c) for c in a.ramp.split(",") if c.strip()]
     per_phase = max(1, a.requests // len(phases))
 
+    # ---- 0) Calentamiento: el canary estaba en 0% y puede tener 0 instancias; los arranques
+    #         en frío no son una regresión del código, así que no se miden.
+    if a.canary_percent > 0 and a.canary_url:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            list(pool.map(lambda _: hit(a.canary_url, "/api/v2/juegos/"), range(int(os.getenv("WARMUP_REQUESTS", "25")))))
+        print(f"[etapa {a.stage}] calentamiento del canary completado")
+
     # ---- 1) Carga pública con rampa de concurrencia --------------------------------
     samples: list[tuple[int, float, str]] = []
     phase_reports = []
@@ -176,11 +187,25 @@ def main() -> int:
     # ---- 3) Endpoint nuevo de v3 contra la URL etiquetada canary --------------------
     v3_direct = None
     if a.canary_url:
-        direct = [hit(a.canary_url, "/api/v3/juegos/", fault_headers) for _ in range(30)]  # secuencial: línea base sin carga
-        direct += [hit(a.canary_url, "/api/v3/juegos/1/disponibilidad", fault_headers) for _ in range(30)]
-        # 404 en disponibilidad/1 es válido si el juego 1 no existe; 5xx/red no lo es.
+        n_direct = int(os.getenv("DIRECT_SAMPLES", "100"))
+        game_id = 1
+        try:  # usa un juego real para que /disponibilidad no devuelva 404 de relleno
+            req = urllib.request.Request(a.canary_url.rstrip("/") + "/api/v3/juegos/",
+                                         headers=fault_headers or {})
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+                items = json.loads(resp.read().decode("utf-8"))
+                if isinstance(items, list) and items:
+                    game_id = items[0].get("id", 1)
+        except Exception:
+            pass
+        # secuencial: línea base sin carga
+        direct = [hit(a.canary_url, "/api/v3/juegos/", fault_headers) for _ in range(n_direct)]
+        direct += [hit(a.canary_url, f"/api/v3/juegos/{game_id}/disponibilidad", fault_headers)
+                   for _ in range(n_direct)]
         v3_direct = summarize(direct)
-        v3_direct["tracks_seen"] = sorted({s[2] for s in direct})
+        # el header solo se evalúa en respuestas recibidas; los timeouts ya cuentan como 5xx/red
+        v3_direct["tracks_seen"] = sorted({s_[2] for s_ in direct if s_[0] != 599})
+        v3_direct["game_id_probado"] = game_id
 
     # ---- 4) Checks -----------------------------------------------------------------
     checks = {
@@ -192,8 +217,11 @@ def main() -> int:
         checks["muestra_canary_suficiente"] = canary["requests"] >= min_canary_samples
         checks["canary_5xx"] = error_rate_ok(canary, max_5xx)
         checks["canary_4xx"] = canary["rate_4xx"] <= max_4xx
-        checks["canary_p95_abs"] = canary["p95_ms"] <= max_p95
-        if stable["requests"] and stable["p95_ms"] > 0:
+        checks["canary_p95_abs"] = (canary["p95_ms"] or 0) <= max_p95
+        min_reg = int(os.getenv("MIN_REGRESSION_SAMPLES", "200"))
+        regression_skipped = canary["requests"] < min_reg
+        if (stable["requests"] and canary["requests"] and stable["p95_ms"] and stable["p95_ms"] > 0
+                and not regression_skipped):
             regress = (canary["p95_ms"] / stable["p95_ms"] - 1) * 100
             # Regresión relativa solo cuenta si además supera un piso absoluto (ms):
             # evita falsos rollbacks por ruido cuando ambos p95 son de pocos ms.
@@ -205,7 +233,7 @@ def main() -> int:
         regress = None
     if v3_direct is not None:
         checks["v3_directo_sin_5xx"] = error_rate_ok(v3_direct, max_5xx)
-        checks["v3_directo_p95"] = v3_direct["p95_ms"] <= max_p95
+        checks["v3_directo_p95"] = (v3_direct["p95_ms"] or 0) <= max_p95
         checks["v3_directo_header_canary"] = v3_direct["tracks_seen"] == ["canary"]
 
     failed = [k for k, v in checks.items() if not v]
@@ -220,6 +248,8 @@ def main() -> int:
         "canary": canary,
         "v3_direct_canary_url": v3_direct,
         "p95_regression_percent": None if regress is None else round(regress, 2),
+        "p95_regression_note": ("omitida: muestra canary menor que MIN_REGRESSION_SAMPLES (p95 poco fiable)"
+                                if a.canary_percent > 0 and regress is None else None),
         "thresholds": {"max_5xx_wilson": max_5xx, "max_4xx": max_4xx,
                        "max_p95_ms": max_p95, "max_p95_regression_percent": max_regress},
         "checks": checks,
