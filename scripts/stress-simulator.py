@@ -1,4 +1,18 @@
+#!/usr/bin/env python3
+"""Simulador de estrés por etapa para el quality gate del Canary Deployment.
 
+Qué hace:
+  1. Genera carga REAL sobre la URL pública del servicio (la que reparte el tráfico),
+     en fases con concurrencia creciente (rampa).
+  2. Cuenta qué track atendió cada petición leyendo la cabecera X-App-Track y
+     comprueba que el reparto observado coincide con el porcentaje de la etapa.
+  3. Evalúa por track: tasa de 5xx (límite Wilson 95%), tasa de 4xx, p95 y timeouts.
+  4. Si la etapa tiene canary > 0 prueba además el endpoint nuevo de v3 contra la
+     URL etiquetada del canary (la URL pública puede mandarlo a stable, que no lo tiene).
+  5. Sale con código 0 (pasa) o 2 (falla -> el rollout debe volver a la etapa 0).
+
+Las peticiones públicas usan rutas /api/v2/... porque existen en AMBAS revisiones.
+"""
 from __future__ import annotations
 
 import argparse
@@ -48,10 +62,10 @@ def error_rate_ok(summary: dict, limit: float, min_wilson_samples: int = 385) ->
     return summary["rate_5xx"] <= limit
 
 
-def hit(base: str, path: str) -> tuple[int, float, str]:
+def hit(base: str, path: str, extra: dict | None = None) -> tuple[int, float, str]:
     """Una petición -> (status, latencia_ms, track). 599 = red/timeout."""
-    req = urllib.request.Request(base.rstrip("/") + path,
-                                 headers={"User-Agent": "videojuegos-stress-simulator/1.0"})
+    headers = {"User-Agent": "videojuegos-stress-simulator/1.0", **(extra or {})}
+    req = urllib.request.Request(base.rstrip("/") + path, headers=headers)
     started = time.perf_counter()
     track, status = "unknown", 599
     try:
@@ -113,6 +127,18 @@ def main() -> int:
     max_regress = env_float("MAX_P95_REGRESSION_PERCENT", 20)
     min_canary_samples = int(os.getenv("MIN_CANARY_SAMPLES", "30"))
 
+    # Inyección de fallos (demo de rollback): solo el track canary reacciona a estas
+    # cabeceras y solo si su revisión se desplegó con ENABLE_CANARY_FAULT_INJECTION=true.
+    fault = os.getenv("STRESS_FAULT", "").strip().lower()          # error | latency | ""
+    fault_from = int(os.getenv("STRESS_FAULT_FROM_STAGE", "1"))
+    fault_headers: dict | None = None
+    if fault and a.stage >= fault_from:
+        token = os.getenv("CANARY_FAULT_TOKEN", "")
+        if not token:
+            ap.error("STRESS_FAULT requiere CANARY_FAULT_TOKEN")
+        fault_headers = {"X-Canary-Fault": fault, "X-Canary-Fault-Token": token}
+        print(f"[etapa {a.stage}] inyectando fallo '{fault}' (solo afecta al canary)")
+
     paths = [p.strip() for p in a.public_path.split(",") if p.strip()]
     phases = [int(c) for c in a.ramp.split(",") if c.strip()]
     per_phase = max(1, a.requests // len(phases))
@@ -123,7 +149,7 @@ def main() -> int:
     for idx, conc in enumerate(phases, 1):
         t0 = time.time()
         with concurrent.futures.ThreadPoolExecutor(max_workers=conc) as pool:
-            chunk = list(pool.map(lambda i: hit(a.public_url, paths[i % len(paths)]), range(per_phase)))
+            chunk = list(pool.map(lambda i: hit(a.public_url, paths[i % len(paths)], fault_headers), range(per_phase)))
         samples.extend(chunk)
         phase_reports.append({"phase": idx, "concurrency": conc, "requests": per_phase,
                               "duration_s": round(time.time() - t0, 2),
@@ -150,8 +176,8 @@ def main() -> int:
     # ---- 3) Endpoint nuevo de v3 contra la URL etiquetada canary --------------------
     v3_direct = None
     if a.canary_url:
-        direct = [hit(a.canary_url, "/api/v3/juegos/") for _ in range(30)]  # secuencial: línea base sin carga
-        direct += [hit(a.canary_url, "/api/v3/juegos/1/disponibilidad") for _ in range(30)]
+        direct = [hit(a.canary_url, "/api/v3/juegos/", fault_headers) for _ in range(30)]  # secuencial: línea base sin carga
+        direct += [hit(a.canary_url, "/api/v3/juegos/1/disponibilidad", fault_headers) for _ in range(30)]
         # 404 en disponibilidad/1 es válido si el juego 1 no existe; 5xx/red no lo es.
         v3_direct = summarize(direct)
         v3_direct["tracks_seen"] = sorted({s[2] for s in direct})
@@ -198,6 +224,7 @@ def main() -> int:
                        "max_p95_ms": max_p95, "max_p95_regression_percent": max_regress},
         "checks": checks,
         "failed_checks": failed,
+        "fault_injected": fault if fault_headers else None,
         "decision": "advance" if not failed else "rollback_to_stage_0",
     }
     os.makedirs(a.report_dir, exist_ok=True)

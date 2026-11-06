@@ -1,7 +1,13 @@
-name: Canary - Build y despliegue v3.0.0 (0% público)
+name: Canary - Build y despliegue (etapa 0, 0% público)
 
 on:
   workflow_dispatch:
+    inputs:
+      enable_fault_injection:
+        description: Habilitar inyección de fallos en el canary (solo para demostrar el rollback)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,7 +22,6 @@ env:
   REGION: us-central1
   SERVICE: videojuegos-api-production
   IMAGE: us-central1-docker.pkg.dev/videojuegos-api-2026-ihoyos/videojuegos-api/api
-  CANARY_VERSION: "3.0.0"
   GCP_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
 
 jobs:
@@ -25,11 +30,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validar tag SemVer
+      - name: Validar tag SemVer y derivar versión del canary
         run: |
-          test "$GITHUB_REF" = "refs/tags/v4.0.1" || {
-            echo "Ejecuta desde el tag v4.0.1." >&2; exit 1;
+          [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]] || {
+            echo "Ejecuta desde un tag SemVer vX.Y.Z (por ejemplo v3.0.0)." >&2; exit 1;
           }
+          echo "CANARY_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
 
       - name: Autenticar en Google Cloud mediante Workload Identity
         uses: google-github-actions/auth@v2
@@ -58,12 +64,24 @@ jobs:
           [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "Digest SHA256 inválido"; exit 1; }
           echo "IMAGE_DIGEST=$IMAGE@$DIGEST" >> "$GITHUB_ENV"
 
+      - name: Validar token de inyección de fallos
+        if: ${{ inputs.enable_fault_injection }}
+        env:
+          CANARY_FAULT_TOKEN: ${{ secrets.CANARY_FAULT_TOKEN }}
+        run: |
+          [[ "$CANARY_FAULT_TOKEN" =~ ^[A-Za-z0-9_-]{16,}$ ]] || {
+            echo "Define el secreto CANARY_FAULT_TOKEN (16+ caracteres, solo letras, números, _ y -)." >&2; exit 1;
+          }
+
       - name: Desplegar revisión canary aislada con 0% público
+        env:
+          ENABLE_FAULT: ${{ inputs.enable_fault_injection && 'true' || 'false' }}
+          CANARY_FAULT_TOKEN: ${{ secrets.CANARY_FAULT_TOKEN }}
         run: |
           gcloud run deploy "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
             --image "$IMAGE_DIGEST" --no-traffic --tag canary \
             --revision-suffix "v3-${GITHUB_RUN_NUMBER}" \
-            --update-env-vars "APP_VERSION=$CANARY_VERSION,APP_TRACK=canary,ENABLE_CANARY_FAULT_INJECTION=false,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_REGION=$REGION"
+            --update-env-vars "APP_VERSION=$CANARY_VERSION,APP_TRACK=canary,ENABLE_CANARY_FAULT_INJECTION=$ENABLE_FAULT,CANARY_FAULT_TOKEN=$CANARY_FAULT_TOKEN,CANARY_FAULT_LATENCY_SECONDS=1.5,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_REGION=$REGION"
           CANARY_REV=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
             --format='value(status.latestReadyRevisionName)')
           test -n "$CANARY_REV"
@@ -79,6 +97,6 @@ jobs:
             --format=json | jq -r '.status.traffic[] | select(.tag=="canary") | .url')
           test -n "$TAG_URL"
           curl -fsS -D /tmp/headers "$TAG_URL/api/v3/juegos/" -o /tmp/body
-          grep -qi '^X-App-Version: 3.0.0' /tmp/headers
+          grep -qi "^X-App-Version: ${CANARY_VERSION}" /tmp/headers
           grep -qi '^X-App-Track: canary' /tmp/headers
           echo "Canary verificada; 100% del tráfico público permanece en stable."

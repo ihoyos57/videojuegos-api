@@ -1,4 +1,4 @@
-name: Canary - Promoción progresiva 10 / 50 / 100
+name: Canary - Promoción progresiva con simulador de estrés
 
 on:
   workflow_dispatch:
@@ -9,6 +9,30 @@ on:
         type: choice
         options: ["120", "180", "240"]
         default: "120"
+      stages:
+        description: Porcentajes de las etapas 1, 2 y 3 (la etapa 0 siempre es 0%)
+        required: true
+        type: choice
+        options: ["10 50 100", "5 25 100", "10 25 100"]
+        default: "10 50 100"
+      stress_requests:
+        description: Peticiones del simulador de estrés por etapa
+        required: true
+        type: choice
+        options: ["300", "600", "1000"]
+        default: "600"
+      fault:
+        description: Fallo a inyectar en el canary (solo demo de rollback; requiere desplegar con enable_fault_injection)
+        required: true
+        type: choice
+        options: ["none", "error", "latency"]
+        default: "none"
+      fault_from_stage:
+        description: Etapa desde la cual se inyecta el fallo
+        required: true
+        type: choice
+        options: ["1", "2", "3"]
+        default: "2"
 
 permissions:
   contents: read
@@ -22,16 +46,10 @@ env:
   PROJECT_ID: videojuegos-api-2026-ihoyos
   REGION: us-central1
   SERVICE: videojuegos-api-production
-  CANARY_VERSION: "3.0.0"
-  REQUESTS_PER_REVISION: "1000"
-  CONCURRENCY: "20"
-  MIN_REQUESTS_PER_REVISION: "1000"
   MAX_5XX_RATE: "0.01"
   MAX_4XX_RATE: "0.05"
   MAX_P95_LATENCY_MS: "500"
   MAX_P95_REGRESSION_PERCENT: "20"
-  MAX_CPU_UTILIZATION: "0.80"
-  MAX_MEMORY_UTILIZATION: "0.85"
   GCP_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
 
 jobs:
@@ -42,13 +60,14 @@ jobs:
       - name: Descargar código
         uses: actions/checkout@v4
 
-      - name: Exigir release v4.0.1
+      - name: Exigir tag SemVer y derivar versión del canary
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" != "refs/tags/v4.0.1" ]]; then
-            echo "Ejecuta este workflow desde el tag v4.0.1." >&2
+          if [[ ! "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Ejecuta este workflow desde un tag SemVer vX.Y.Z." >&2
             exit 1
           fi
+          echo "CANARY_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
 
       - name: Autenticarse en Google Cloud
         uses: google-github-actions/auth@v2
@@ -66,6 +85,11 @@ jobs:
       - name: Ejecutar etapas y horneado
         env:
           BAKE_SECONDS: ${{ inputs.bake_seconds }}
+          STAGES: ${{ inputs.stages }}
+          STRESS_REQUESTS: ${{ inputs.stress_requests }}
+          STRESS_FAULT: ${{ inputs.fault != 'none' && inputs.fault || '' }}
+          STRESS_FAULT_FROM_STAGE: ${{ inputs.fault_from_stage }}
+          CANARY_FAULT_TOKEN: ${{ secrets.CANARY_FAULT_TOKEN }}
         run: bash scripts/canary-rollout.sh
 
       - name: Adjuntar evidencia
