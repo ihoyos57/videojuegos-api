@@ -1,0 +1,22 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+  pushgateway:
+    image: prom/pushgateway:v1.9.0
+    ports: ["127.0.0.1:9091:9091"]
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports: ["127.0.0.1:3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Configura una contraseña local}
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboard.json:/var/lib/grafana/dashboards/chaos.json:ro
+      - grafana-data:/var/lib/grafana
+volumes:
+  prometheus-data:
+  grafana-data:

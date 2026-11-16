@@ -1,0 +1,101 @@
+{
+  "uid": "chaos-v4",
+  "title": "V4 multicloud dos integrantes",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "2s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Ventana de inyecci\u00f3n",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "chaos-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "expr": "chaos_injection_active",
+          "legendFormat": "{{experiment}} {{round}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "p95 acumulado en ms",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "chaos-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "expr": "chaos_flow_p95_ms",
+          "legendFormat": "{{experiment}} {{round}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error local de 0 a 1",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "chaos-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "expr": "chaos_local_error_ratio",
+          "legendFormat": "{{experiment}} {{round}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Integraci\u00f3n completa de 0 a 1",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "chaos-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "expr": "chaos_complete_ratio",
+          "legendFormat": "{{experiment}} {{round}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
