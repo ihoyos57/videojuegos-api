@@ -9,20 +9,14 @@ from app.database import Base, engine
 from app import models
 from app.routers import jugadores, juegos, compras, v3
 from prometheus_fastapi_instrumentator import Instrumentator
-from app.observability.fault_injection import aplicar_fallo_canary
 
-APP_VERSION = os.getenv("APP_VERSION", "2.0.1")
+APP_VERSION = os.getenv("APP_VERSION", "4.0.0")
 APP_TRACK = os.getenv("APP_TRACK", "stable")
 
 app = FastAPI(title="API de Videojuegos", version=APP_VERSION)
 
 @app.middleware("http")
 async def identify_release(request: Request, call_next):
-    fallo = await aplicar_fallo_canary(request)
-    if fallo is not None:
-        fallo.headers["X-App-Version"] = APP_VERSION
-        fallo.headers["X-App-Track"] = APP_TRACK
-        return fallo
     response = await call_next(request)
     response.headers["X-App-Version"] = APP_VERSION
     response.headers["X-App-Track"] = APP_TRACK
@@ -32,7 +26,10 @@ Instrumentator(excluded_handlers=["/metrics"]).instrument(app).expose(app, endpo
 
 # Mantiene el esquema existente. La funcionalidad V3 no requiere cambios destructivos
 # ni nuevas columnas: el estado de inventario se calcula a partir de stock.
-Base.metadata.create_all(bind=engine)
+with engine.begin() as schema_connection:
+    if engine.dialect.name == "postgresql":
+        schema_connection.execute(text("SELECT pg_advisory_xact_lock(44004000)"))
+    Base.metadata.create_all(bind=schema_connection)
 
 # Rutas originales preservadas para clientes actuales.
 app.include_router(jugadores.router)
@@ -61,3 +58,16 @@ def test_db():
         result = connection.execute(text("SELECT version();"))
         version = result.fetchone()
     return {"conexion": "exitosa", "postgres_version": version[0]}
+
+from app.multicloud import install
+install(app)
+
+@app.get("/health/live")
+def live():
+    return {"status": "ok"}
+
+@app.get("/health/ready")
+def ready():
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+    return {"status": "ready"}

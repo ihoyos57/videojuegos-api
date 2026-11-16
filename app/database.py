@@ -21,7 +21,10 @@ if not DATABASE_URL:
         "INSTANCE_CONNECTION_NAME"
     )
 
-    if not all(
+    if os.getenv("DB_HOST"):
+        DATABASE_URL = URL.create("postgresql+psycopg2", username=DB_USER,
+            password=DB_PASSWORD, host=os.environ["DB_HOST"], port=5432, database=DB_NAME)
+    if not DATABASE_URL and not all(
         [
             DB_PASSWORD,
             DB_USER,
@@ -35,7 +38,7 @@ if not DATABASE_URL:
             "INSTANCE_CONNECTION_NAME"
         )
 
-    DATABASE_URL = URL.create(
+    DATABASE_URL = DATABASE_URL or URL.create(
         drivername="postgresql+psycopg2",
         username=DB_USER,
         password=DB_PASSWORD,
@@ -59,6 +62,7 @@ else:
     )
 
     with engine.connect() as connection:
+        connection.execute(text("SELECT pg_advisory_xact_lock(44004000)"))
         connection.execute(
             text(f"CREATE SCHEMA IF NOT EXISTS {DB_SCHEMA}")
         )
