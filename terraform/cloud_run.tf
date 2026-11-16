@@ -36,5 +36,5 @@ module "cloud_run" {
 variable "deployer_service_account_email" {
   description = "Cuenta de servicio de GitHub Actions que despliega en Cloud Run"
   type        = string
-  default     = "github-actions-deployer@videojuegos-api-2026-ihoyos.iam.gserviceaccount.com"
+  default     = ""
 }

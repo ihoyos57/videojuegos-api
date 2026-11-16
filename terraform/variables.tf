@@ -36,7 +36,7 @@ variable "database_tier" {
 variable "container_image" {
   description = "Imagen Docker de la API publicada en Artifact Registry"
   type        = string
-  default     = "us-central1-docker.pkg.dev/videojuegos-api-2026-ihoyos/videojuegos-api/api:latest"
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
 variable "database_password" {

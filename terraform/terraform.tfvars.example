@@ -1,10 +1,5 @@
-﻿project_id       = "videojuegos-api-2026-ihoyos"
-region           = "us-central1"
-database_name    = "videojuegos_db"
-database_user    = "videojuegos_app"
-database_tier    = "db-f1-micro"
-container_image  = "us-central1-docker.pkg.dev/videojuegos-api-2026-ihoyos/videojuegos-api/api:latest"
-
-# Reemplaza este valor solo en tu archivo local terraform.tfvars.
-# Nunca uses una contraseña real en este archivo de ejemplo.
-database_password = "REEMPLAZAR_POR_UN_SECRETO_LOCAL"
+project_id = "TU_PROYECTO_GCP"
+region = "us-central1"
+deploy_cloud_run = false
+deployer_service_account_email = "TU_CUENTA_DE_DESPLIEGUE@TU_PROYECTO_GCP.iam.gserviceaccount.com"
+# export TF_VAR_database_password; no escribir el secreto aquí.
