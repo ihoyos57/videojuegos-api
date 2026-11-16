@@ -1,0 +1,39 @@
+name: V4 Chaos quality gate
+on:
+  workflow_dispatch:
+    inputs:
+      agreed_window:
+        description: "Ventana acordada y cuentas propias con datos sintéticos"
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: v4-chaos
+  cancel-in-progress: false
+jobs:
+  experiment:
+    if: inputs.agreed_window
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: '0.54.0'
+      - run: pip install -r chaos/requirements.txt
+      - name: Execute declarative experiment and enforce measured gate
+        env:
+          BASE_URL: ${{ vars.CHAOS_BASE_URL }}
+          CHAOS_TOKEN: ${{ secrets.CHAOS_TOKEN }}
+          CHAOS_WINDOW_ACK: 'yes'
+        run: bash scripts/chaos-gate.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gcp-chaos-evidence
+          path: evidence/
