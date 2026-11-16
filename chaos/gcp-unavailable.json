@@ -1,0 +1,71 @@
+{
+  "version": "1.0.0",
+  "title": "V4 gcp unavailable",
+  "description": "Perfil fijo 15s subida a 5 VU, 60s a 5 VU, 15s bajada. Dos rondas idénticas de unavailable. Sólo GET sintéticos autenticados; no afecta peticiones sin cabeceras. AWS coordinador; GCP también prueba el flujo inverso.",
+  "tags": [
+    "v4.0.0",
+    "gcp",
+    "two-students"
+  ],
+  "steady-state-hypothesis": {
+    "title": "Flujo completo sin inyección disponible antes y después",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "live-control",
+        "tolerance": true,
+        "provider": {
+          "type": "python",
+          "module": "chaos_actions",
+          "func": "preflight"
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "action",
+      "name": "measured-before-after",
+      "provider": {
+        "type": "python",
+        "module": "chaos_actions",
+        "func": "run_suite",
+        "arguments": {
+          "fault": "unavailable"
+        }
+      }
+    },
+    {
+      "type": "probe",
+      "name": "quality-gate",
+      "tolerance": true,
+      "provider": {
+        "type": "python",
+        "module": "chaos_actions",
+        "func": "gate_passed"
+      }
+    }
+  ],
+  "rollbacks": [
+    {
+      "type": "action",
+      "name": "automatic-recovery",
+      "provider": {
+        "type": "python",
+        "module": "chaos_actions",
+        "func": "rollback"
+      }
+    }
+  ],
+  "configuration": {},
+  "extensions": [
+    {
+      "name": "experiment-contract",
+      "hypothesis": "Con el perfil P y 90s de 503 de mascotas, error del servicio local compuesto <=1%",
+      "blast_radius": "Sólo solicitudes GET con token y vencimiento, dependencia remota, bases sintéticas propias; cero mutaciones",
+      "duration_seconds": 90,
+      "abort": "Falla de control sin caos, >115s por ronda, error local >50% en ronda protegida",
+      "reversal": "Fin de cabeceras al detener k6; TTL 15s por solicitud y timeout máximo 6s; espera 7s y verifica flujo completo"
+    }
+  ]
+}
