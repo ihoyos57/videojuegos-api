@@ -17,3 +17,13 @@ crash.log
 crash.*.log
 *.tfplan
 gha-creds-*.json
+
+.env*
+!.env.example
+*.tfstate*
+*.tfvars
+!*.tfvars.example
+.venv/
+__pycache__/
+evidence/*
+!evidence/.gitkeep
