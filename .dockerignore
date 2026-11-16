@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.github
+.env
+.env.*
+*.log
+*.tsbuildinfo
+terraform
+terraform-canary
+.venv
+__pycache__
+.pytest_cache
+evidence
+docs
+tests-v4
