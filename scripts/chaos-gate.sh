@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+export PYTHONPATH="$PWD:${PYTHONPATH:-}"
 export EXPERIMENT=gcp-unavailable
 export RUN_ID=${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 export FLOW_PATH=${FLOW_PATH:-/juegos/}
