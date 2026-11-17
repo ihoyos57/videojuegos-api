@@ -1,9 +1,13 @@
 from dotenv import load_dotenv
+import asyncio
+from contextlib import suppress
 
 load_dotenv()
 
 import os
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from app.security.telemetry import emit, heartbeat_loop
 from sqlalchemy import text
 from app.database import Base, engine
 from app import models
@@ -14,6 +18,32 @@ APP_VERSION = os.getenv("APP_VERSION", "4.0.0")
 APP_TRACK = os.getenv("APP_TRACK", "stable")
 
 app = FastAPI(title="API de Videojuegos", version=APP_VERSION)
+
+@app.on_event("startup")
+async def start_security_heartbeat():
+    app.state.security_heartbeat_task = asyncio.create_task(heartbeat_loop())
+
+@app.on_event("shutdown")
+async def stop_security_heartbeat():
+    task = getattr(app.state, 'security_heartbeat_task', None)
+    if task:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+@app.middleware('http')
+async def security_honeytoken(request: Request, call_next):
+    # Deliberately never return secret data or invoke another service.
+    decoy_path = os.getenv('SECURITY_HONEYTOKEN_PATH', '')
+    if decoy_path.startswith('/.well-known/') and request.url.path == decoy_path:
+        from secrets import token_hex
+        trace_id = request.headers.get('x-trace-id') or token_hex(16)
+        emit('security_event', experiment='telemetry', technique='DECOY_PROBE',
+             action='honeytoken_touched', outcome='alert', traceId=trace_id,
+             source='http_path')
+        return JSONResponse({'detail':'Not Found'},status_code=404,headers={'X-Trace-Id':trace_id})
+    return await call_next(request)
+
 
 @app.middleware("http")
 async def identify_release(request: Request, call_next):

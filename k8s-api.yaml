@@ -51,6 +51,13 @@ spec:
             - {name: APP_VERSION, value: "4.0.0"}
             - {name: PEER_API_URL, value: "${AWS_API_URL}"}
             - {name: CHAOS_ENABLED, value: "${CHAOS_ENABLED}"}
+            - {name: SECURITY_AUTH_MODE, value: "${SECURITY_AUTH_MODE}"}
+            - {name: SECURITY_HEARTBEAT_ENABLED, value: "${SECURITY_HEARTBEAT_ENABLED}"}
+            - {name: SECURITY_HEARTBEAT_PAUSED, value: "false"}
+            - {name: SECURITY_HONEYTOKEN_PATH, value: "${SECURITY_HONEYTOKEN_PATH}"}
+            - name: SERVICE_AUTH_SECRET
+              valueFrom:
+                secretKeyRef: {name: api-secrets, key: SERVICE_AUTH_SECRET}
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef: {name: api-secrets, key: DB_PASSWORD}

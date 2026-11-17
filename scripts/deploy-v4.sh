@@ -17,13 +17,17 @@ export DB_USER=${TF_VAR_database_user:-videojuegos_app}
 export DB_NAME=${TF_VAR_database_name:-videojuegos_db}
 export DB_SCHEMA=${DB_SCHEMA:-public}
 export CHAOS_ENABLED=${CHAOS_ENABLED:-false}
+export SECURITY_AUTH_MODE=${SECURITY_AUTH_MODE:-off}
+export SECURITY_HEARTBEAT_ENABLED=${SECURITY_HEARTBEAT_ENABLED:-false}
+export SECURITY_HONEYTOKEN_PATH=${SECURITY_HONEYTOKEN_PATH:-}
+export SERVICE_AUTH_SECRET=${SERVICE_AUTH_SECRET:-}
 kubectl create namespace chaos --dry-run=client -o yaml | kubectl apply -f -
 # Secret bytes go through stdin, not shell argument values.
 python3 - <<'PYSECRET' | kubectl apply -f -
 import json, os
-print(json.dumps({'apiVersion':'v1','kind':'Secret','metadata':{'name':'api-secrets','namespace':'chaos'},'type':'Opaque','stringData':{'DB_PASSWORD':os.environ['TF_VAR_database_password'],'CHAOS_TOKEN':os.environ['CHAOS_TOKEN']}}))
+print(json.dumps({'apiVersion':'v1','kind':'Secret','metadata':{'name':'api-secrets','namespace':'chaos'},'type':'Opaque','stringData':{'DB_PASSWORD':os.environ['TF_VAR_database_password'],'CHAOS_TOKEN':os.environ['CHAOS_TOKEN'],'SERVICE_AUTH_SECRET':os.environ.get('SERVICE_AUTH_SECRET','')}}))
 PYSECRET
 # Only substitute known template variables.
-envsubst '${IMAGE} ${RUNTIME_SA} ${SQL_CONNECTION} ${DB_USER} ${DB_NAME} ${DB_SCHEMA} ${AWS_API_URL} ${CHAOS_ENABLED}' < k8s-api.yaml | kubectl apply -f -
+envsubst '${IMAGE} ${RUNTIME_SA} ${SQL_CONNECTION} ${DB_USER} ${DB_NAME} ${DB_SCHEMA} ${AWS_API_URL} ${CHAOS_ENABLED} ${SECURITY_AUTH_MODE} ${SECURITY_HEARTBEAT_ENABLED} ${SECURITY_HONEYTOKEN_PATH}' < k8s-api.yaml | kubectl apply -f -
 kubectl -n chaos rollout status deployment/videojuegos --timeout=600s
 kubectl -n chaos get pods,service

@@ -8,6 +8,7 @@ import re
 import secrets
 import time
 import httpx
+from app.security.service_proof import dependency_headers
 from starlette.responses import JSONResponse, Response
 
 def authorized(request):
@@ -41,7 +42,7 @@ def install(app):
                 url = os.getenv('PEER_API_URL', '').rstrip('/')
                 if not url:
                     raise ValueError('peer_not_configured')
-                headers = {'traceparent':traceparent}
+                headers = {'traceparent':traceparent, **dependency_headers()}
                 if fault == 'unavailable':
                     headers.update({'x-chaos-token':os.environ['CHAOS_TOKEN'],
                         'x-chaos-until':request.headers['x-chaos-until'], 'x-chaos-fault':'unavailable'})

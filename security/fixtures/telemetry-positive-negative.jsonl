@@ -1,0 +1,3 @@
+{"event":"security_event","action":"honeytoken_touched","outcome":"alert","traceId":"00000000000000000000000000000001","expectedAlert":true}
+{"event":"security_event","action":"normal_http_request","outcome":"allowed","traceId":"00000000000000000000000000000002","expectedAlert":false}
+{"event":"security_heartbeat","timestamp":"2026-01-01T12:00:00+00:00","expectedAlert":false}

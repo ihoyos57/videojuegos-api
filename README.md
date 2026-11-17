@@ -1,3 +1,9 @@
+# Entregable independiente de Defensa en Profundidad (2 integrantes) — GCP / telemetría e IA
+
+La rúbrica de **18 de noviembre de 2026** se aborda sobre el despliegue V4 AWS/GCP sin borrar el proyecto anterior. Guía de Defensa: [plan de game day](docs/DEFENSA-GAMEDAY.md), [comandos y reversión](docs/GUIA-DEFENSA-EJECUCION.md) e [informe para llenar con evidencia de nube](docs/INFORME-DEFENSA-PENDIENTE.md). Se incluyen reglas de detección como código, fixtures positivos y negativos, workflows CI y simuladores/sondas que requieren permiso explícito. **No hay MTTD/MTTC ni RPO/RTO de nube medidos incluidos; deben ejecutarse en las cuentas propias.** Los experimentos son E1 identidad (AWS), E3 telemetría/IA (GCP), E4 objeto sintético S3 (ambos). Los ejemplos no deben apuntar al estado Terraform ni a bases de datos productivas. **SEGURIDAD por defecto desactivada** para no romper el flujo activo.
+
+---
+
 # Videojuegos V4 Ingeniería del Caos multicloud
 
 Entrega para dos integrantes. GCP aloja esta API; la otra nube aloja la API compañera. Versión 4.0.0. Empezar por [la guía completa de despliegue](docs/GUIA-DESPLIEGUE.md), que también cubre la otra nube y el orden de integración.

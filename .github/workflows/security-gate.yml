@@ -1,0 +1,33 @@
+name: Defense-in-depth security gate (offline unit fixtures)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'app/security/**'
+      - 'app/multicloud.py'
+      - 'security/**'
+      - 'tests-security/**'
+      - '.github/workflows/security-gate.yml'
+  pull_request:
+    paths:
+      - 'app/security/**'
+      - 'app/multicloud.py'
+      - 'security/**'
+      - 'tests-security/**'
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pytest
+      - run: PYTHONPATH=. pytest tests-v4 tests-security -q
+      - run: python security/offline_gate.py --out evidence/security-offline-gate.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gcp-security-offline-gate
+          path: evidence/security-offline-gate.json

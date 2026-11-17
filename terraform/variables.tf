@@ -50,3 +50,9 @@ variable "deploy_cloud_run" {
   type        = bool
   default     = false
 }
+
+variable "enable_security_monitoring" {
+  description = "Opt-in: create log-based security metrics and alarms for the game day"
+  type        = bool
+  default     = false
+}
